@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>길찾기 실험</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- 0. 시작 화면 -->
+    <section id="screen-intro" class="screen">
+      <h1>3D 길찾기 실험</h1>
+      <p>이 실험은 목적지를 안내하는 소리 신호가 길찾기에 미치는 영향을 알아봅니다.</p>
+      <label>참가자 이름(닉네임)
+        <input id="input-name" type="text" placeholder="예: 홍길동" />
+      </label>
+      <p class="notice">⚠️ 반드시 <b>이어폰(헤드폰)</b>을 착용한 상태로 진행해주세요. 소리 방향이 실험의 핵심입니다.</p>
+      <button id="btn-start-survey" disabled>다음</button>
+    </section>
+
+    <!-- 1. R-SOD 설문 -->
+    <section id="screen-survey" class="screen hidden">
+      <h2>간단한 설문 (4문항)</h2>
+      <p class="hint">평소 자신의 모습과 얼마나 비슷한지, 1(전혀 아니다)~7(매우 그렇다) 중 하나를 선택해주세요.</p>
+      <div id="survey-items"></div>
+      <button id="btn-submit-survey" disabled>다음</button>
+    </section>
+
+    <!-- 2. 안내 화면 -->
+    <section id="screen-instructions" class="screen hidden">
+      <h2>진행 방법</h2>
+      <ul>
+        <li>W/A/S/D로 이동, 마우스로 시선을 조작합니다.</li>
+        <li>목적지에 도착하면 자동으로 종료됩니다.</li>
+        <li>먼저 연습 1회를 진행합니다 (기록에 포함되지 않습니다).</li>
+        <li>이후 본 시행을 여러 번 진행합니다.</li>
+      </ul>
+      <button id="btn-start-warmup">연습 시작</button>
+    </section>
+
+    <!-- 3. 3D 시행 화면 -->
+    <section id="screen-trial" class="screen hidden">
+      <div id="trial-canvas-wrap">
+        <canvas id="trial-canvas"></canvas>
+        <div id="crosshair">+</div>
+        <div id="trial-hud"></div>
+        <div id="click-to-start" class="overlay">
+          <p>화면을 클릭하면 시작합니다</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. 시행 간 대기 화면 -->
+    <section id="screen-between" class="screen hidden">
+      <h2 id="between-title"></h2>
+      <p id="between-desc"></p>
+      <button id="btn-next-trial">다음</button>
+    </section>
+
+    <!-- 5. 종료 화면 -->
+    <section id="screen-done" class="screen hidden">
+      <h2>수고하셨습니다!</h2>
+      <p>모든 시행이 끝났습니다. 아래 버튼을 눌러 결과 파일을 저장한 뒤, 연구자에게 전달해주세요.</p>
+      <button id="btn-download">결과 파일 다운로드 (JSON)</button>
+      <pre id="result-preview"></pre>
+    </section>
+
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="config.js"></script>
+  <script src="maps.js"></script>
+  <script src="survey.js"></script>
+  <script src="audio.js"></script>
+  <script src="trial.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
