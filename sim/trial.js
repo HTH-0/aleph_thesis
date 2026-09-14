@@ -52,27 +52,6 @@ function runTrial(spec, onComplete) {
   ceiling.position.set(groundSize / 2, CONFIG.WALL_HEIGHT, groundSize / 2);
   scene.add(ceiling);
 
-  // 벽 (전부 같은 재질 — 시각 랜드마크 제거)
-  const wallMat = new THREE.MeshBasicMaterial({ color: 0x8a8a8a, fog: true });
-  const wallGeo = new THREE.BoxGeometry(
-    CONFIG.CELL_SIZE,
-    CONFIG.WALL_HEIGHT,
-    CONFIG.CELL_SIZE
-  );
-  for (let r = 0; r < GRID_SIZE; r++) {
-    for (let c = 0; c < GRID_SIZE; c++) {
-      if (mapDef.grid[r][c] === 1) {
-        const mesh = new THREE.Mesh(wallGeo, wallMat);
-        mesh.position.set(
-          c * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2,
-          CONFIG.WALL_HEIGHT / 2,
-          r * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2
-        );
-        scene.add(mesh);
-      }
-    }
-  }
-
   function cellCenter([r, c]) {
     return new THREE.Vector3(
       c * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2,
@@ -86,16 +65,85 @@ function runTrial(spec, onComplete) {
   const landmarkWorldPositions = mapDef.landmarks.map(cellCenter);
   camera.position.copy(startPos);
 
-  // 목적지 표시 — 랜드마크와 달리 이건 "정답 위치"를 미리 알려주는 게 아니라
-  // 안개(FOG_FAR) 범위 안에 들어와야만(약 2칸 앞) 보이므로, 멀리서 미리 보고
-  // 찾아갈 수는 없다. 그냥 도착 순간 참가자가 "여기가 맞다"를 눈으로 확인할
-  // 수 있게 해주는 표시일 뿐이다.
-  const goalMarker = new THREE.Mesh(
-    new THREE.SphereGeometry(0.4, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xffd166, fog: true })
+  // 목적지 표시 — 도착 순간 "여기가 맞다"를 눈으로 확인시켜주는 용도일 뿐,
+  // 멀리서부터 목적지 방향을 미리 알려주면 안 된다. 처음엔 떠다니는 구체로
+  // 표시했는데, 청각 랜드마크는 절대 시각적으로 안 보여준다고 계속 강조해온
+  // 마당에 떠다니는 오브젝트가 있으면 "이것도 랜드마크인가?" 하고 참가자가
+  // 헷갈릴 수 있다는 지적을 받아, 대신 목적지 칸을 둘러싼 벽 자체의 색을
+  // 바꾸는 방식으로 변경 — 오브젝트가 아니라 "방이 다르게 생겼다"는 느낌이라
+  // 랜드마크와 범주가 확실히 갈린다.
+  // (실수 이력: 처음엔 이 벽 재질을 transparent+opacity로 만들어서 멀리서는
+  //  opacity 0으로 안 보이게 했는데, 그러면 벽이 반투명해져서 뒤가 비쳐
+  //  보이는 "벽이 뚫린" 버그가 됐다. 벽은 항상 완전히 불투명(항상 시야를
+  //  막음)해야 하고, 색깔만 회색<->금색으로 서서히 바뀌어야 한다 — 그래서
+  //  opacity 대신 material.color를 매 프레임 거리 기반으로 보간한다.)
+  // 색이 바뀌는 범위는 안개가 걷히는 범위(FOG_NEAR~FOG_FAR)와 맞춘다 —
+  // "안개가 걷혀서 벽이 보이기 시작하면 바로 도착지인 게 구분돼야, 대충
+  // 훑어보고 지나치는 일이 없다"는 요구사항. 벽이 안 보이는 범위 밖에서는
+  // 안개 자체가 이미 다 가려주므로(모든 벽이 동일하게 안 보임) 더 멀리서
+  // 미리 알려주는 건 아니다 — 딱 "보이는 순간부터 구분됨"만 보장한다.
+  const GOAL_MARKER_NEAR = CONFIG.FOG_NEAR;
+  const GOAL_MARKER_FAR = CONFIG.FOG_FAR;
+  const WALL_COLOR = new THREE.Color(0x8a8a8a);
+  const GOAL_WALL_COLOR = new THREE.Color(0xffd166);
+  const goalWallMat = new THREE.MeshBasicMaterial({ color: WALL_COLOR.clone(), fog: true });
+
+  // 벽 (전부 같은 재질 — 시각 랜드마크 제거. 목적지 칸에 맞닿은 벽만 예외)
+  const wallMat = new THREE.MeshBasicMaterial({ color: 0x8a8a8a, fog: true });
+  const wallGeo = new THREE.BoxGeometry(
+    CONFIG.CELL_SIZE,
+    CONFIG.WALL_HEIGHT,
+    CONFIG.CELL_SIZE
   );
-  goalMarker.position.copy(goalPos);
-  scene.add(goalMarker);
+  // 목적지에 맞닿은 벽은 통째로 칠하면 너무 길어 보여서, 목적지 쪽 절반만
+  // 금색으로 칠하고 나머지 절반은 원래 회색 그대로 둔다.
+  const wallHalfGeoX = new THREE.BoxGeometry(CONFIG.CELL_SIZE / 2, CONFIG.WALL_HEIGHT, CONFIG.CELL_SIZE);
+  const wallHalfGeoZ = new THREE.BoxGeometry(CONFIG.CELL_SIZE, CONFIG.WALL_HEIGHT, CONFIG.CELL_SIZE / 2);
+  const [goalR, goalC] = mapDef.goal;
+  const goalAdjacentKeys = new Set(
+    [[goalR + 1, goalC], [goalR - 1, goalC], [goalR, goalC + 1], [goalR, goalC - 1]]
+      .map(([r, c]) => `${r},${c}`)
+  );
+
+  function addGoalAdjacentWall(r, c) {
+    const dr = r - goalR, dc = c - goalC;
+    const cx = c * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
+    const cz = r * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
+    const cy = CONFIG.WALL_HEIGHT / 2;
+    const quarter = CONFIG.CELL_SIZE / 4;
+
+    const nearMesh = new THREE.Mesh(dc !== 0 ? wallHalfGeoX : wallHalfGeoZ, goalWallMat);
+    const farMesh = new THREE.Mesh(dc !== 0 ? wallHalfGeoX : wallHalfGeoZ, wallMat);
+    if (dc !== 0) {
+      const towardGoal = dc > 0 ? -quarter : quarter;
+      nearMesh.position.set(cx + towardGoal, cy, cz);
+      farMesh.position.set(cx - towardGoal, cy, cz);
+    } else {
+      const towardGoal = dr > 0 ? -quarter : quarter;
+      nearMesh.position.set(cx, cy, cz + towardGoal);
+      farMesh.position.set(cx, cy, cz - towardGoal);
+    }
+    scene.add(nearMesh);
+    scene.add(farMesh);
+  }
+
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      if (mapDef.grid[r][c] === 1) {
+        if (goalAdjacentKeys.has(`${r},${c}`)) {
+          addGoalAdjacentWall(r, c);
+          continue;
+        }
+        const mesh = new THREE.Mesh(wallGeo, wallMat);
+        mesh.position.set(
+          c * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2,
+          CONFIG.WALL_HEIGHT / 2,
+          r * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2
+        );
+        scene.add(mesh);
+      }
+    }
+  }
 
   const deadEndKeySet = new Set(mapDef.deadEndCells.map(([r, c]) => `${r},${c}`));
   const shortestCells = shortestPathCellCount(mapDef) || 1;
@@ -207,8 +255,16 @@ function runTrial(spec, onComplete) {
     const dt = Math.min((now - lastT) / 1000, 0.1);
     lastT = now;
 
-    // 목적지 표시를 살짝 위아래로 흔들어서 눈에 더 잘 띄게 함
-    goalMarker.position.y = goalPos.y + Math.sin(now / 400) * 0.15;
+    // 목적지 칸에 맞닿은 벽만 가까이 갈수록 회색 -> 금색으로 서서히 바뀌게 함
+    // (도착 확인용 — 벽은 항상 불투명 유지, 색만 보간해서 "뚫려 보이는" 버그 방지)
+    const distToGoalMarker = Math.hypot(
+      camera.position.x - goalPos.x,
+      camera.position.z - goalPos.z
+    );
+    const markerT = Math.max(0, Math.min(1,
+      (GOAL_MARKER_FAR - distToGoalMarker) / (GOAL_MARKER_FAR - GOAL_MARKER_NEAR)
+    ));
+    goalWallMat.color.lerpColors(WALL_COLOR, GOAL_WALL_COLOR, markerT);
 
     camera.rotation.order = "YXZ";
     camera.rotation.y = yaw;

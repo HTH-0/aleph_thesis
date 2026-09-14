@@ -1,5 +1,5 @@
 // 맵(미로) 정의.
-// 기본 미로 1개를 알고리즘(recursive backtracker)으로 생성하고, 회전/반전만으로
+// 기본 미로 1개를 알고리즘(randomized Prim's algorithm)으로 생성하고, 회전/반전만으로
 // 나머지 2개를 만든다.
 // (근거: He et al., 2024 — 기본 미로를 회전/반전하면 경로 길이·꺾임 수가
 //  구조적으로 100% 동일한 맵을 여러 개 만들 수 있다.)
@@ -8,16 +8,53 @@
 //
 // 처음엔 미로를 손으로 그렸는데(9x9 -> 13x13으로 한 번 키움), 손으로 그리면
 // 의도치 않게 지름길(루프)이 생기기 쉬워 매번 별도 스크립트로 검증해야 했다.
-// recursive backtracker는 "완전 미로(perfect maze, 루프 없는 트리)"를 구조적으로
-// 보장하므로 이 문제 자체가 사라진다. 시드를 고정해서 매번 같은 미로가
-// 재현되게 하고(reference.txt의 재현 방법 요구사항), 여러 시드를 시험해서
-// "완벽 주행 시간 대비 헤맬 때 시간이 충분히 늘어날 만큼 큰 미로"가 되도록
-// 경로 길이가 이전 손그림 버전(41칸)과 같은 시드를 채택했다 — 자세한 탐색
-// 과정은 docs/진행상황.md 참고.
+// 그래서 recursive backtracker(무작위 깊이우선탐색) 알고리즘으로 전환했는데 —
+// 이 알고리즘은 "완전 미로(루프 없는 트리)"를 구조적으로 보장해 루프 문제는
+// 풀었지만, 알려진 특성대로 분기가 적고 복도가 긴 미로를 만드는 경향이 있었다.
+// 실제로 플레이해보니 "단일 길로 진행해야 하는 구간이 너무 길다"는 피드백을
+// 받아, **randomized Prim's algorithm**으로 다시 전환했다 — 같은 크기에서
+// recursive backtracker보다 분기점이 2~3배 많고 분기 사이 구간이 훨씬 짧은
+// 미로가 나옴을 직접 비교 검증함(최장 단일구간: backtracker 13~49칸 vs
+// Prim's 4~12칸, n=6 기준). 이 알고리즘도 완전 미로(루프 없는 트리)를
+// 구조적으로 보장하므로 루프 검증 문제는 그대로 해결된 채 유지된다.
+//
+// 시드를 고정해서 매번 같은 미로가 재현되게 한다(reference.txt의 재현 방법
+// 요구사항). Prim's algorithm으로 바꾼 뒤에도(29칸, 갈림길 9개) 실제로 플레이해
+// 보니 여전히 "헤매는 느낌이 하나도 없이 그냥 진행하다보면 바로 깨진다"는
+// 피드백을 받았다 — 참고 이미지(분기가 촘촘한 클래식 미로)와 비교해도 확실히
+// 빈약했다. 랜드마크 0개 조건에서 시간이 의미 있게 늘어나려면 실제로 헤맬
+// 만한 공간이 있어야 하므로, "10분 안에"라는 목표보다 난이도(헤매는 구간의
+// 존재)를 우선해 미로를 다시 크게 키웠다 — 10x10칸(21x21격자), 경로 41칸,
+// 갈림길 14개(전체 27개), 최장 단일구간 4칸으로 훨씬 촘촘하고 큰 미로로 교체.
+// 이 결정 때문에 본시행 3회 합산 예상 시간이 다시 10분을 살짝 넘을 수 있다
+// (TRIAL_TIMEOUT_SEC도 그만큼 늘림 — config.js 참고).
+//
+// 그 뒤 "난이도를 살짝 낮출 수 있나"는 요청을 받아, 분기 밀도(갈림길 개수·
+// 최장 단일구간)는 거의 그대로 유지하면서 경로만 짧게(41->33칸) 줄인 시드로
+// 다시 골랐다 — 9x9칸(19x19격자), 갈림길 12개(전체 23개), 최장 단일구간
+// 4칸. "헤맬 공간은 유지하되 전체 체험 시간만 조금 줄인다"는 의도.
+//
+// 이어서 "15x15 격자로 제작 가능할까?"라는 요청으로 한 번 더 줄였다 —
+// 7x7칸(15x15격자)에서 시드를 여럿 탐색해, 분기 밀도(갈림길/경로 비율)가
+// 오히려 더 높으면서(10/25=40% vs 기존 12/33=36%) 최장 단일구간은 그대로
+// 4칸인 시드(=112)를 골랐다. 경로가 25칸으로 더 짧아졌지만 시작-도착 간
+// 최단 이동거리(맨해튼 거리+1)와 정확히 같아 이 크기에서 나올 수 있는
+// 가장 촘촘한 구조였다.
+//
+// **분기 밀도 재탐색, 가지 길이 기준 추가 (2026-09-14)**: "구조가 괴상하게
+// 일렬로 뻗어있다, 한쪽으로 너무 깊이 가는 것보다 적당히"라는 피드백. 기존
+// maxRun 지표는 "시작→도착 최단경로 위"의 분기 사이 구간만 재고 있어서, 최단
+// 경로 밖의 막다른 가지(dead-end branch)가 얼마나 길게 뻗는지는 놓치고
+// 있었음 — 실제로 seed=112는 경로 밖에 12칸짜리 일자 복도가 하나 있었음
+// (미로 전체를 분기점 단위로 다시 그래프화해서 모든 가지 길이를 측정하는
+// 스크립트로 확인). "미로 전체에서 분기점 사이 최장 가지"라는 지표를 새로
+// 추가해 재탐색 — 경로 위 최장구간 4칸은 유지하면서 전체 최장 가지도 6칸
+// 이내로 제한한 시드(=379)를 채택. 경로 길이(25칸)·갈림길 개수(9개, 전체
+// 16개)는 비슷한 수준을 유지.
 
-const MAZE_CELL_N = 6;    // 6x6칸짜리 미로 (칸과 칸 사이 벽을 포함하면 13x13 격자)
-const MAZE_SEED = 14;     // 고정 시드 — 항상 같은 미로가 재현됨
-const GRID_SIZE = MAZE_CELL_N * 2 + 1; // 13x13, 테두리는 항상 벽
+const MAZE_CELL_N = 7;    // 7x7칸짜리 미로 (칸과 칸 사이 벽을 포함하면 15x15 격자)
+const MAZE_SEED = 379;    // 고정 시드 — 항상 같은 미로가 재현됨 (경로 25칸, 갈림길 9개, 경로상 최장구간 4칸, 미로 전체 최장 가지 6칸)
+const GRID_SIZE = MAZE_CELL_N * 2 + 1; // 15x15, 테두리는 항상 벽
 
 // 시드 고정 의사난수 생성기 (mulberry32) — Math.random()은 시드를 못 주므로 직접 구현.
 function mulberry32(seed) {
@@ -30,40 +67,50 @@ function mulberry32(seed) {
   };
 }
 
-// recursive backtracker: n x n개의 "칸"을 무작위로 연결해 완전 미로를 만든다.
-// 칸은 홀수 좌표(1,3,5,...)에, 칸 사이 벽은 그 중간 짝수 좌표에 위치한다.
-// 결과는 항상 트리 구조(루프 없음)임이 알고리즘 자체로 보장된다.
+// randomized Prim's algorithm: n x n개의 "칸"을, 이미 미로에 포함된 칸과 맞닿은
+// "경계(frontier)" 벽들 중 하나를 무작위로 골라 허물어가며 확장한다. 칸은
+// 홀수 좌표(1,3,5,...)에, 칸 사이 벽은 그 중간 짝수 좌표에 위치한다.
+// recursive backtracker(깊이우선, 한 방향으로 쭉 파고드는 방식)와 달리 여러
+// 지점에서 동시에 넓게 퍼지듯 확장되어, 분기가 많고 복도가 짧은 미로가 나온다.
+// 결과는 이 알고리즘도 항상 트리 구조(루프 없음)임이 보장된다.
 function generateMazeGrid(n, seed) {
   const rng = mulberry32(seed);
   const size = n * 2 + 1;
   const grid = Array.from({ length: size }, () => new Array(size).fill(1));
-  const visited = Array.from({ length: n }, () => new Array(n).fill(false));
+  const inMaze = Array.from({ length: n }, () => new Array(n).fill(false));
 
   const toGrid = (cr, cc) => [2 * cr + 1, 2 * cc + 1];
+  const carve = (cr, cc) => { const [r, c] = toGrid(cr, cc); grid[r][c] = 0; };
+  const carveWall = (cr1, cc1, cr2, cc2) => {
+    const [r1, c1] = toGrid(cr1, cc1);
+    const [r2, c2] = toGrid(cr2, cc2);
+    grid[(r1 + r2) / 2][(c1 + c2) / 2] = 0;
+  };
 
-  const stack = [[0, 0]];
-  visited[0][0] = true;
-  const [sr0, sc0] = toGrid(0, 0);
-  grid[sr0][sc0] = 0;
+  // frontier: [칸r, 칸c, 이 칸을 미로에 연결해줄 수 있는 인접 칸(이미 미로에 포함됨)]
+  const frontier = [];
+  inMaze[0][0] = true;
+  carve(0, 0);
+  for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const nr = dr, nc = dc;
+    if (nr >= 0 && nr < n && nc >= 0 && nc < n) frontier.push([nr, nc, 0, 0]);
+  }
 
-  while (stack.length) {
-    const [cr, cc] = stack[stack.length - 1];
-    const neighbors = [];
+  while (frontier.length) {
+    const idx = Math.floor(rng() * frontier.length);
+    const [cr, cc, fr, fc] = frontier[idx];
+    frontier.splice(idx, 1);
+    if (inMaze[cr][cc]) continue; // 다른 경로로 이미 편입된 칸이면 스킵
+
+    carveWall(fr, fc, cr, cc);
+    carve(cr, cc);
+    inMaze[cr][cc] = true;
+
     for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const nr = cr + dr, nc = cc + dc;
-      if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
-      if (!visited[nr][nc]) neighbors.push([nr, nc]);
+      if (nr < 0 || nr >= n || nc < 0 || nc >= n || inMaze[nr][nc]) continue;
+      frontier.push([nr, nc, cr, cc]);
     }
-    if (neighbors.length === 0) { stack.pop(); continue; }
-    const [nr, nc] = neighbors[Math.floor(rng() * neighbors.length)];
-
-    const [r1, c1] = toGrid(cr, cc);
-    const [r2, c2] = toGrid(nr, nc);
-    grid[(r1 + r2) / 2][(c1 + c2) / 2] = 0; // 두 칸 사이 벽 허물기
-    grid[r2][c2] = 0;
-
-    visited[nr][nc] = true;
-    stack.push([nr, nc]);
   }
   return grid;
 }

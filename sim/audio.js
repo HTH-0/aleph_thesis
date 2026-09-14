@@ -170,27 +170,48 @@ class LandmarkAudio {
     this.timers.push(setInterval(playOnce, 1800));
   }
 
-  // 2: 금속 차임 — 비정수배 배음 4개(고음역)를 길게 감쇠시켜 잔향처럼 퍼지는 여운, 2.5초 간격
-  // (진짜 컨볼루션 리버브 대신, 배음을 여러 개 겹쳐 길게 감쇠시켜 비슷한 느낌을 낸다)
-  // 귀 아프다는 피드백으로 조정: 최상단 배음을 7900Hz -> 6300Hz로 낮추고,
-  // 공격(attack)을 0.01s -> 0.035s로 늘려 뾰족한 스파이크 대신 완만하게 퍼지게 하고,
-  // 전체 게인도 낮췄다.
+  // 2: 금속 차임 — 원래 순수 사인파 배음 여러 개를 겹쳐서 만들었는데, "날카롭고
+  // 귀가 찢어질 것 같다"는 피드백이 반복됨. 순수음(pure tone)은 주파수가
+  // 한 점에 집중돼 있어서 사람 귀에 유독 날카롭고 피로하게 들린다 — 특히
+  // 2~5kHz대(사람 귀가 가장 민감한 대역이라 통증에도 가장 민감함)에서는
+  // 게인을 아무리 낮춰도 잘 안 풀리는 문제였다. 그래서 순수음 대신 대역통과
+  // 필터를 씌운 노이즈(필터링된 화이트노이즈)로 바꿈 — 에너지가 한 주파수에
+  // 몰리지 않고 넓게 퍼져 있어서, 풍경(wind chime)이 "쟁그랑"보다 "샤르르"에
+  // 가깝게 들리는 것과 같은 원리로 훨씬 부드럽게 들린다. 고음역대라는 특징
+  // (귓바퀴 스펙트럼 왜곡으로 방향 판단에 유리)은 그대로 유지.
+  _getChimeNoiseBuffer() {
+    if (this._chimeNoiseBuffer && this._chimeNoiseBufferCtx === this.ctx) {
+      return this._chimeNoiseBuffer;
+    }
+    const dur = 2; // 초
+    const buffer = this.ctx.createBuffer(1, Math.ceil(this.ctx.sampleRate * dur), this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    this._chimeNoiseBuffer = buffer;
+    this._chimeNoiseBufferCtx = this.ctx;
+    return buffer;
+  }
+
   _playChimeOnce(dest) {
     if (!this.ctx) return;
-    const partials = [3200, 4100, 5200, 6300];
     const t = this.ctx.currentTime;
-    partials.forEach((freq, i) => {
-      const osc = this.ctx.createOscillator();
+    const buffer = this._getChimeNoiseBuffer();
+    const bands = [[3400, 0.16], [4800, 0.1]]; // [중심주파수, 최대게인]
+    bands.forEach(([freq, peak]) => {
+      const src = this.ctx.createBufferSource();
+      src.buffer = buffer;
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.value = freq;
+      filter.Q.value = 4;
       const gain = this.ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.value = freq;
-      const peak = Math.max(0.06 - i * 0.01, 0.02);
       gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(peak, t + 0.035);
+      gain.gain.exponentialRampToValueAtTime(peak, t + 0.06);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.8); // 길게 퍼지는 여운
-      osc.connect(gain);
+      src.connect(filter);
+      filter.connect(gain);
       gain.connect(dest);
-      osc.start(t); osc.stop(t + 1.85);
+      src.start(t); src.stop(t + 1.85);
     });
   }
 
