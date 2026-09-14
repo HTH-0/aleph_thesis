@@ -19,7 +19,10 @@ function runTrial(spec, onComplete) {
   const renderer = getSharedRenderer(canvas);
 
   const scene = new THREE.Scene();
-  const fogColor = 0x1a1a1a;
+  // 안개색을 밝게 — "몇 칸 앞까지 보이는지"(FOG_NEAR/FOG_FAR)는 실험 통제상 중요하지만,
+  // 그 안이 얼마나 어두운 톤이냐는 실험 내용과 무관해서 눈 피로만 늘릴 뿐이라 밝혔다.
+  // (1차로 살짝 밝혔는데도 어둡다는 피드백이 있어 더 밝게 다시 조정함)
+  const fogColor = 0x7c7c86;
   scene.background = new THREE.Color(fogColor);
   scene.fog = new THREE.Fog(fogColor, CONFIG.FOG_NEAR, CONFIG.FOG_FAR);
 
@@ -34,7 +37,7 @@ function runTrial(spec, onComplete) {
   const groundSize = GRID_SIZE * CONFIG.CELL_SIZE;
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(groundSize, groundSize),
-    new THREE.MeshBasicMaterial({ color: 0x3a3a3a, fog: true })
+    new THREE.MeshBasicMaterial({ color: 0x6e6e72, fog: true })
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(groundSize / 2, 0, groundSize / 2);
@@ -42,7 +45,8 @@ function runTrial(spec, onComplete) {
 
   const ceiling = new THREE.Mesh(
     new THREE.PlaneGeometry(groundSize, groundSize),
-    new THREE.MeshBasicMaterial({ color: 0x2a2a2a, fog: true })
+    // 천장을 가장 밝게 잡아 "하늘"처럼 위쪽이 트여 보이게 함
+    new THREE.MeshBasicMaterial({ color: 0x9c9ca4, fog: true })
   );
   ceiling.rotation.x = Math.PI / 2;
   ceiling.position.set(groundSize / 2, CONFIG.WALL_HEIGHT, groundSize / 2);
@@ -81,6 +85,17 @@ function runTrial(spec, onComplete) {
   const goalPos = cellCenter(mapDef.goal);
   const landmarkWorldPositions = mapDef.landmarks.map(cellCenter);
   camera.position.copy(startPos);
+
+  // 목적지 표시 — 랜드마크와 달리 이건 "정답 위치"를 미리 알려주는 게 아니라
+  // 안개(FOG_FAR) 범위 안에 들어와야만(약 2칸 앞) 보이므로, 멀리서 미리 보고
+  // 찾아갈 수는 없다. 그냥 도착 순간 참가자가 "여기가 맞다"를 눈으로 확인할
+  // 수 있게 해주는 표시일 뿐이다.
+  const goalMarker = new THREE.Mesh(
+    new THREE.SphereGeometry(0.4, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0xffd166, fog: true })
+  );
+  goalMarker.position.copy(goalPos);
+  scene.add(goalMarker);
 
   const deadEndKeySet = new Set(mapDef.deadEndCells.map(([r, c]) => `${r},${c}`));
   const shortestCells = shortestPathCellCount(mapDef) || 1;
@@ -191,6 +206,9 @@ function runTrial(spec, onComplete) {
     rafId = requestAnimationFrame(animate);
     const dt = Math.min((now - lastT) / 1000, 0.1);
     lastT = now;
+
+    // 목적지 표시를 살짝 위아래로 흔들어서 눈에 더 잘 띄게 함
+    goalMarker.position.y = goalPos.y + Math.sin(now / 400) * 0.15;
 
     camera.rotation.order = "YXZ";
     camera.rotation.y = yaw;

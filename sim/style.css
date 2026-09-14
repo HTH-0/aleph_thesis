@@ -1,80 +1,231 @@
+:root {
+  --bg: #0d0f14;
+  --panel: #171b26;
+  --panel-border: #2a2f40;
+  --text: #eceef4;
+  --text-dim: #8b93a7;
+  --accent: #5b8cff;
+  --accent-hover: #6f9aff;
+  --audio: #45c9c0;
+  --warn: #e8b23d;
+  --warn-bg: #2a2210;
+  --warn-border: #6b5119;
+}
+
 * { box-sizing: border-box; }
 
 html, body {
   margin: 0;
   padding: 0;
-  background: #111;
-  color: #eee;
-  font-family: -apple-system, "Malgun Gothic", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Pretendard", -apple-system, "Malgun Gothic", sans-serif;
+  line-height: 1.5;
 }
 
 #app {
   min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .screen {
+  width: 100%;
   max-width: 640px;
   margin: 0 auto;
-  padding: 32px 20px;
+  padding: 48px 20px 60px;
+  text-align: center;
+}
+
+/* 정보 밀도가 높은 블록(불릿 목록 등)은 가운데 정렬이면 오히려 읽기 어려워져서
+   내부만 왼쪽 정렬로 되돌린다. */
+.info-block,
+.survey-item,
+#soundcheck-list,
+.lede-list,
+label {
+  text-align: left;
+}
+
+.lede-list {
+  margin: 18px 0 0;
+  padding-left: 20px;
+}
+
+.lede-list li {
+  margin: 8px 0;
+  line-height: 1.6;
 }
 
 .screen.hidden {
   display: none;
 }
 
-h1, h2 {
+.eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 8px;
+}
+
+h1 {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.35;
+  margin: 0 0 16px;
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  font-size: 21px;
+  font-weight: 700;
   line-height: 1.4;
+  margin: 0 0 18px;
+}
+
+p {
+  line-height: 1.65;
 }
 
 .notice {
-  background: #3a2a00;
-  border: 1px solid #a67c00;
-  padding: 12px 14px;
-  border-radius: 8px;
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  color: #f2d9a0;
+  padding: 13px 15px;
+  border-radius: 10px;
+  font-size: 14.5px;
+}
+
+.notice b {
+  color: var(--warn);
 }
 
 .hint {
-  color: #aaa;
+  color: var(--text-dim);
   font-size: 0.95em;
 }
 
 label {
   display: block;
-  margin: 16px 0;
+  margin: 18px 0;
+  font-size: 14px;
+  color: var(--text-dim);
 }
 
 input[type="text"] {
   display: block;
   margin-top: 8px;
   width: 100%;
-  padding: 10px;
+  padding: 11px 12px;
   font-size: 1em;
-  border-radius: 6px;
-  border: 1px solid #555;
-  background: #222;
-  color: #eee;
+  font-family: inherit;
+  border-radius: 8px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+input[type="text"]:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 button {
-  margin-top: 20px;
-  padding: 12px 22px;
-  font-size: 1em;
-  border-radius: 8px;
+  margin-top: 24px;
+  padding: 13px 24px;
+  font-size: 0.95em;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: 9px;
   border: none;
-  background: #3b82f6;
+  background: var(--accent);
   color: white;
   cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--accent-hover);
 }
 
 button:disabled {
-  background: #444;
+  background: var(--panel-border);
+  color: var(--text-dim);
   cursor: not-allowed;
+}
+
+/* ---- 안내 화면: 성격별로 묶은 정보 블록 ---- */
+.info-block {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-top: 14px;
+}
+
+.info-block--audio {
+  border-left-color: var(--audio);
+}
+
+.info-block--flow {
+  border-left-color: var(--text-dim);
+}
+
+.info-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 10px;
+}
+
+.info-block--audio .info-label {
+  color: var(--audio);
+}
+
+.info-block--flow .info-label {
+  color: var(--text-dim);
+}
+
+.info-block ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.info-block li {
+  margin: 6px 0;
+  line-height: 1.6;
+}
+
+.info-block p {
+  margin: 0 0 8px;
+}
+
+.info-block p:last-child {
+  margin-bottom: 0;
+}
+
+.info-block .sub-list {
+  margin: 6px 0 4px;
+  padding-left: 18px;
+  list-style: "— ";
+}
+
+.info-block .sub-list li {
+  margin: 3px 0;
+  color: var(--text-dim);
+  font-size: 0.94em;
 }
 
 .survey-item {
   margin: 20px 0;
   padding-bottom: 16px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--panel-border);
 }
 
 .survey-item p {
@@ -92,7 +243,7 @@ button:disabled {
   flex: 1;
   text-align: center;
   font-size: 0.85em;
-  color: #ccc;
+  color: var(--text-dim);
 }
 
 .scale-row input {
@@ -153,6 +304,37 @@ button:disabled {
   display: none;
 }
 
+/* ---- 소리 미리 듣기 ---- */
+#soundcheck-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.soundcheck-btn {
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  font-weight: 600;
+}
+
+.soundcheck-btn:hover {
+  background: #202537;
+  border-color: var(--audio);
+}
+
+.soundcheck-btn span {
+  font-size: 0.8em;
+  font-weight: normal;
+  color: var(--text-dim);
+}
+
 #result-preview {
   background: #000;
   padding: 12px;
@@ -160,4 +342,5 @@ button:disabled {
   overflow-x: auto;
   font-size: 0.75em;
   max-height: 240px;
+  border: 1px solid var(--panel-border);
 }

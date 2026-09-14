@@ -4,29 +4,39 @@
 //
 // 근거: Jetzschke et al. (2017) — 서로 완전히 같은 소리는 몇 개를 줘도
 // 위치 애매함이 안 풀리지만, 서로 다른(unique) 소리 3개는 애매함이 풀린다.
-// 그래서 3개 랜드마크를 리듬/음색이 뚜렷하게 다르게 만든다.
-//   0: 쇳소리(금속, 짧고 날카로운 클랭 반복)
-//   1: 물방울 소리(높은음에서 낮은음으로 떨어지는 짧은 핑, 다른 박자로 반복)
-//   2: 낮은 기계음(끊기지 않는 허밍)
+// 그래서 3개 랜드마크를 저/중/고 주파수대와 리듬을 뚜렷하게 다르게 만든다.
+// (저주파는 양쪽 귀 도달시간차로, 고주파는 귓바퀴 형태에 의한 스펙트럼
+//  왜곡으로 방향을 판단하는 메커니즘 자체가 달라서, 대역을 나눠두면
+//  삼각측량에 쓸 수 있는 단서가 겹치지 않고 더 풍부해진다.)
+//   0: 목재 펄스 (저음 200~600Hz대, 통통거리는 타악기, 1.2초 간격)
+//   1: 물방울 아르페지오 (중음 800~2500Hz대, 상향하는 짧은 음 3개, 1.8초 간격)
+//   2: 금속 차임 (고음 3~6kHz대, 길게 퍼지는 잔향, 2.5초 간격)
+// 세 소리 모두 "주기적으로 짧게 울리고 끊기는" 방식으로 통일했다 — 이전엔 2번만
+// 끊김없이 계속 재생되는 허밍이라, "랜드마크 2개" 조건에서 2번이 빠지는 경우와
+// 0·1번이 빠지는 경우가 서로 다른 종류의 변화(끊김없는 소리 유무 자체가 바뀜)가
+// 되어버리는 문제가 있었다. 재생 간격도 1.2/1.8/2.5초로 서로 배수 관계가 아니게
+// 잡아서, 세 소리가 동시에 겹쳐 울려 마스킹(소리 씹힘)되는 일이 자주 반복되지
+// 않게 했다.
 class LandmarkAudio {
   constructor() {
     this.ctx = null;
-    this.panners = [];   // 활성화된 PannerNode 목록
-    this.timers = [];    // clearInterval 대상
-    this.humNodes = [];  // 계속 재생 중인 오실레이터(허밍) — stop 시 정지 필요
+    this.panners = [];         // 활성화된 PannerNode 목록
+    this.timers = [];          // clearInterval 대상
+    this.lfoNodes = [];        // 계속 재생 중인 오실레이터(근접 확인용 트레몰로 LFO) — stop 시 정지 필요
+    this.activeLandmarks = []; // [{ pos: {x,y,z}, proximityDepth: GainNode }]
   }
 
   // 반드시 사용자 클릭 등 제스처 이후에 호출해야 브라우저 정책에 안 걸린다.
-  // landmarkWorldPositions: [{x,y,z}, ...] (인덱스 0/1/2 = 쇳소리/물방울/기계음)
+  // landmarkWorldPositions: [{x,y,z}, ...] (인덱스 0/1/2 = 목재펄스/물방울아르페지오/금속차임)
   // activeIndices: 이번 시행에서 켤 랜드마크 인덱스 목록 (0/2/3개)
   init(landmarkWorldPositions, activeIndices) {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     this.ctx = new AudioCtx();
 
     const timbreFns = [
-      (panner) => this._scheduleMetal(panner),
-      (panner) => this._scheduleDrop(panner),
-      (panner) => this._startHum(panner),
+      (panner) => this._scheduleWood(panner),
+      (panner) => this._scheduleDropArpeggio(panner),
+      (panner) => this._scheduleChime(panner),
     ];
 
     activeIndices.forEach((idx) => {
@@ -36,9 +46,30 @@ class LandmarkAudio {
       panner.refDistance = CONFIG.LANDMARK_REF_DISTANCE;
       panner.maxDistance = CONFIG.LANDMARK_MAX_DISTANCE;
       panner.rolloffFactor = CONFIG.LANDMARK_ROLLOFF;
-      this._setPos(panner, landmarkWorldPositions[idx]);
-      panner.connect(this.ctx.destination);
+      const pos = landmarkWorldPositions[idx];
+      this._setPos(panner, pos);
       this.panners.push(panner);
+
+      // 근접 확인 효과: 랜드마크에 가까워질수록 소리가 떨리는(트레몰로) 정도가
+      // 커진다. panner 출력 뒤에 진폭 변조 체인을 하나 더 연결한다.
+      // (tremoloGain.gain = 1 + lfo(sine) * depth, depth는 매 프레임 거리에 따라 갱신)
+      const tremoloGain = this.ctx.createGain();
+      tremoloGain.gain.value = 1;
+      const lfo = this.ctx.createOscillator();
+      lfo.type = "sine";
+      lfo.frequency.value = CONFIG.LANDMARK_PROXIMITY_RATE;
+      const lfoDepth = this.ctx.createGain();
+      lfoDepth.gain.value = 0; // 멀리 있을 땐 떨림 없음, updateListener()가 매 프레임 갱신
+      lfo.connect(lfoDepth);
+      lfoDepth.connect(tremoloGain.gain);
+      lfo.start();
+
+      panner.connect(tremoloGain);
+      tremoloGain.connect(this.ctx.destination);
+
+      this.lfoNodes.push(lfo);
+      this.activeLandmarks.push({ pos, lfoDepth });
+
       timbreFns[idx](panner);
     });
   }
@@ -74,85 +105,124 @@ class LandmarkAudio {
       listener.setPosition(pos.x, pos.y, pos.z);
       listener.setOrientation(forward.x, forward.y, forward.z, up.x, up.y, up.z);
     }
+
+    const far = CONFIG.LANDMARK_PROXIMITY_FAR;
+    const near = CONFIG.LANDMARK_PROXIMITY_NEAR;
+    const maxDepth = CONFIG.LANDMARK_PROXIMITY_DEPTH;
+    const now = this.ctx.currentTime;
+    this.activeLandmarks.forEach(({ pos: lp, lfoDepth }) => {
+      const d = Math.hypot(pos.x - lp.x, pos.y - lp.y, pos.z - lp.z);
+      const t = Math.max(0, Math.min(1, (far - d) / (far - near)));
+      lfoDepth.gain.setTargetAtTime(t * maxDepth, now, 0.05);
+    });
   }
 
-  // 0: 쇳소리 — 짧고 날카로운 금속성 클랭, 약 1.4초 간격
-  _scheduleMetal(panner) {
-    const playOnce = () => {
-      if (!this.ctx) return;
-      const t = this.ctx.currentTime;
-      const osc1 = this.ctx.createOscillator();
-      const osc2 = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc1.type = "square";
-      osc2.type = "square";
-      osc1.frequency.value = 1400;
-      osc2.frequency.value = 1900; // 배음 살짝 어긋나게 해서 "쇳소리" 느낌
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.25, t + 0.008);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
-      osc1.connect(gain);
-      osc2.connect(gain);
-      gain.connect(panner);
-      osc1.start(t); osc1.stop(t + 0.25);
-      osc2.start(t); osc2.stop(t + 0.25);
-    };
+  // 0: 목재 펄스 — 저음(300/440Hz) 두 배음이 살짝 어긋난 통통거리는 타격음, 1.2초 간격
+  _playWoodOnce(dest) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const osc1 = this.ctx.createOscillator();
+    const osc2 = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc1.type = "triangle";
+    osc2.type = "triangle";
+    osc1.frequency.value = 300;
+    osc2.frequency.value = 440; // 정수배가 아니게 어긋나서 목재 특유의 둔탁함
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.3, t + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(dest);
+    osc1.start(t); osc1.stop(t + 0.18);
+    osc2.start(t); osc2.stop(t + 0.18);
+  }
+
+  _scheduleWood(panner) {
+    const playOnce = () => this._playWoodOnce(panner);
     playOnce();
-    this.timers.push(setInterval(playOnce, 1400));
+    this.timers.push(setInterval(playOnce, 1200));
   }
 
-  // 1: 물방울 — 높은음에서 낮은음으로 빠르게 떨어지는 핑, 약 1.1초 간격(엇박)
-  _scheduleDrop(panner) {
-    const playOnce = () => {
-      if (!this.ctx) return;
-      const t = this.ctx.currentTime;
+  // 1: 물방울 아르페지오 — 상향하는 짧은 음 3개(900/1300/1900Hz), 1.8초 간격
+  _playDropArpeggioOnce(dest) {
+    if (!this.ctx) return;
+    const notes = [900, 1300, 1900];
+    const t0 = this.ctx.currentTime;
+    notes.forEach((freq, i) => {
+      const t = t0 + i * 0.09;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = "sine";
-      osc.frequency.setValueAtTime(1200, t);
-      osc.frequency.exponentialRampToValueAtTime(350, t + 0.15);
-      gain.gain.setValueAtTime(0.35, t);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.3, t + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
       osc.connect(gain);
-      gain.connect(panner);
-      osc.start(t); osc.stop(t + 0.2);
-    };
-    playOnce();
-    this.timers.push(setInterval(playOnce, 1100));
+      gain.connect(dest);
+      osc.start(t); osc.stop(t + 0.16);
+    });
   }
 
-  // 2: 낮은 기계음 — 끊기지 않고 계속 도는 허밍 (진폭이 느리게 출렁임)
-  _startHum(panner) {
+  _scheduleDropArpeggio(panner) {
+    const playOnce = () => this._playDropArpeggioOnce(panner);
+    playOnce();
+    this.timers.push(setInterval(playOnce, 1800));
+  }
+
+  // 2: 금속 차임 — 비정수배 배음 4개(고음역)를 길게 감쇠시켜 잔향처럼 퍼지는 여운, 2.5초 간격
+  // (진짜 컨볼루션 리버브 대신, 배음을 여러 개 겹쳐 길게 감쇠시켜 비슷한 느낌을 낸다)
+  // 귀 아프다는 피드백으로 조정: 최상단 배음을 7900Hz -> 6300Hz로 낮추고,
+  // 공격(attack)을 0.01s -> 0.035s로 늘려 뾰족한 스파이크 대신 완만하게 퍼지게 하고,
+  // 전체 게인도 낮췄다.
+  _playChimeOnce(dest) {
     if (!this.ctx) return;
-    const osc = this.ctx.createOscillator();
-    const lfo = this.ctx.createOscillator();
-    const lfoGain = this.ctx.createGain();
-    const mainGain = this.ctx.createGain();
+    const partials = [3200, 4100, 5200, 6300];
+    const t = this.ctx.currentTime;
+    partials.forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const peak = Math.max(0.06 - i * 0.01, 0.02);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(peak, t + 0.035);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.8); // 길게 퍼지는 여운
+      osc.connect(gain);
+      gain.connect(dest);
+      osc.start(t); osc.stop(t + 1.85);
+    });
+  }
 
-    osc.type = "sawtooth";
-    osc.frequency.value = 85;
+  _scheduleChime(panner) {
+    const playOnce = () => this._playChimeOnce(panner);
+    playOnce();
+    this.timers.push(setInterval(playOnce, 2500));
+  }
 
-    lfo.type = "sine";
-    lfo.frequency.value = 0.6; // 느린 출렁임
-    lfoGain.gain.value = 0.05;
-    mainGain.gain.value = 0.12;
-
-    lfo.connect(lfoGain);
-    lfoGain.connect(mainGain.gain);
-    osc.connect(mainGain);
-    mainGain.connect(panner);
-
-    osc.start();
-    lfo.start();
-    this.humNodes.push(osc, lfo);
+  // 안내 단계에서 "소리 미리 듣기" 버튼이 쓰는 진입점 — 공간감(패닝) 없이
+  // 리스너 바로 앞에서 한 번만 재생해서, 세 음색을 구분하는 연습만 하게 한다.
+  // idx: 0=목재펄스, 1=물방울아르페지오, 2=금속차임
+  previewOnce(idx) {
+    if (!this.ctx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AudioCtx();
+    }
+    const fns = [
+      () => this._playWoodOnce(this.ctx.destination),
+      () => this._playDropArpeggioOnce(this.ctx.destination),
+      () => this._playChimeOnce(this.ctx.destination),
+    ];
+    fns[idx]();
   }
 
   stop() {
     this.timers.forEach(clearInterval);
     this.timers = [];
-    this.humNodes.forEach((n) => { try { n.stop(); } catch (e) {} });
-    this.humNodes = [];
+    this.lfoNodes.forEach((n) => { try { n.stop(); } catch (e) {} });
+    this.lfoNodes = [];
     this.panners = [];
+    this.activeLandmarks = [];
     if (this.ctx) {
       this.ctx.close();
       this.ctx = null;
