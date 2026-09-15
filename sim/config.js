@@ -78,3 +78,19 @@ const CONFIG = {
   // (매번 같은 랜드마크만 빠지면 그 랜드마크의 위치 효과가 섞여 들어갈 수 있어서)
   LEVEL2_DROP_INDEX_BY_SLOT: [2, 0, 1, 2, 0, 1],
 };
+
+// 안전장치: 참가자 한 명의 본시행 3회에 같은 맵이 두 번 배정되면 안 된다는
+// 요구가 명시적으로 있었으므로, 각 행이 실제로 맵 0/1/2를 한 번씩만 쓰는지
+// 로드 시점에 직접 검증한다. 나중에 표를 수정하다 실수해도 참가자가 플레이해서
+// 알아차리기 전에 콘솔에서 바로 걸리게 하기 위함.
+(function assertAssignmentTableHasNoDuplicateMaps() {
+  CONFIG.ASSIGNMENT_TABLE.forEach((row, i) => {
+    const maps = row.map((spec) => spec.map);
+    if (new Set(maps).size !== maps.length) {
+      throw new Error(
+        `ASSIGNMENT_TABLE[${i}]에 같은 맵이 두 번 배정되어 있습니다(${JSON.stringify(maps)}) — ` +
+        `참가자가 같은 맵을 두 번 플레이하게 되므로 config.js를 다시 확인하세요.`
+      );
+    }
+  });
+})();

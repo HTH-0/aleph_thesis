@@ -200,21 +200,52 @@ function runTrial(spec, onComplete) {
 
   let started = false;
   let finished = false;
+  let paused = false;      // 알트탭 등으로 포인터락이 풀려서 잠시 멈춘 상태
+  let pauseStartedAt = 0;
   let startTime = 0;
   let distance = 0;
   let reorientationSec = 0;
   let deadEndEntries = 0;
   let wasInDeadEnd = false;
 
+  // 오버레이 문구는 일시정지 때 바뀌므로, 매 시행 시작 시 초기 문구로 되돌려둔다
+  // (그대로 두면 이전 시행에서 바뀐 문구가 다음 시행에도 남아있게 됨).
+  const overlayText = overlayEl.querySelector("p");
+  const OVERLAY_START_MSG = "화면을 클릭하면 시작합니다";
+  const OVERLAY_RESUME_MSG = "포인터가 풀렸습니다 — 클릭하면 이어서 진행합니다";
+  if (overlayText) overlayText.textContent = OVERLAY_START_MSG;
+
   function onOverlayClick() {
-    if (started) return;
-    started = true;
+    if (finished) return;
     overlayEl.classList.add("hidden");
     canvas.requestPointerLock();
-    audio.init(landmarkWorldPositions, activeLandmarkIndices);
-    startTime = performance.now();
+    if (!started) {
+      started = true;
+      audio.init(landmarkWorldPositions, activeLandmarkIndices);
+      startTime = performance.now();
+    } else if (paused) {
+      // 멈춰있던 시간만큼 시작 시각을 밀어서, 알트탭한 시간이 제한시간(260초)을
+      // 갉아먹지 않게 한다.
+      startTime += performance.now() - pauseStartedAt;
+      paused = false;
+    }
   }
   overlayEl.addEventListener("click", onOverlayClick);
+
+  // 알트탭 등으로 브라우저가 강제로 포인터락을 풀면, 마우스 시선 조작(onMouseMove)만
+  // 조용히 멈추고 WASD 이동은 계속 처리되는 오류가 있었다("화면은 안 움직이는데
+  // 키보드만 작동함") — 참가자가 다시 클릭해서 잠글 방법도 없었음. 포인터락이
+  // 풀리는 순간을 감지해서 시행을 일시정지하고, 오버레이를 다시 보여준다.
+  function onPointerLockChange() {
+    if (document.pointerLockElement === canvas) return; // 잠김 유지/재획득
+    if (started && !finished && !paused) {
+      paused = true;
+      pauseStartedAt = performance.now();
+      if (overlayText) overlayText.textContent = OVERLAY_RESUME_MSG;
+      overlayEl.classList.remove("hidden");
+    }
+  }
+  document.addEventListener("pointerlockchange", onPointerLockChange);
 
   let rafId = null;
   let lastT = performance.now();
@@ -224,6 +255,7 @@ function runTrial(spec, onComplete) {
     window.removeEventListener("keyup", onKeyUp);
     window.removeEventListener("resize", onResize);
     document.removeEventListener("mousemove", onMouseMove);
+    document.removeEventListener("pointerlockchange", onPointerLockChange);
     overlayEl.removeEventListener("click", onOverlayClick);
     if (rafId) cancelAnimationFrame(rafId);
     audio.stop();
@@ -270,7 +302,7 @@ function runTrial(spec, onComplete) {
     camera.rotation.y = yaw;
     camera.rotation.x = pitch;
 
-    if (started && !finished) {
+    if (started && !finished && !paused) {
       const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
       const right = new THREE.Vector3()
         .crossVectors(forward, new THREE.Vector3(0, 1, 0))
