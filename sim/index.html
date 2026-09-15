@@ -16,8 +16,8 @@
       <h1>3D 길찾기 실험</h1>
       <p>이 실험은 미로 안에서 들리는 <b>청각 랜드마크</b> 소리를 활용해 목적지를 찾는 과제입니다.</p>
       <ul class="lede-list">
-        <li>미로 곳곳에 서로 다른 소리를 내는 <b>고정 지점(랜드마크) 0~3개</b>가 있습니다.</li>
-        <li>목적지 방향을 알려주는 소리가 아닙니다 — 소리의 방향과 세기로 스스로 위치를 추정하는 데 쓰는 고정 기준점입니다.</li>
+        <li>정사각형 미로의 <b>모서리에 고정된 소리 지점(랜드마크) 0~3개</b>가 계속 울립니다.</li>
+        <li>목적지 방향을 알려주는 소리가 아닙니다 — 소리가 어느 쪽에서 들리는지로 스스로 방향을 가늠하는 데 쓰는 고정 기준점입니다.</li>
       </ul>
       <label>참가자 이름(닉네임)
         <input id="input-name" type="text" placeholder="예: 홍길동" />
@@ -47,20 +47,46 @@
       </div>
 
       <div class="info-block info-block--audio">
-        <p class="info-label">청각 랜드마크</p>
+        <p class="info-label">소리가 어디에 있는가</p>
+        <p>미로는 정사각형이고, <b>네 모서리 중 세 곳</b>에서 각각 다른 소리가 계속 납니다.</p>
+
+        <svg class="layout-diagram" viewBox="0 0 280 212" role="img"
+             aria-label="정사각형 미로의 네 모서리 도식. 시작 모서리에 고음, 양옆 두 모서리에 저음과 중음, 대각선 반대편 모서리는 소리가 없는 목적지.">
+          <rect x="70" y="40" width="140" height="140" rx="6"
+                fill="none" stroke="var(--panel-border)" stroke-width="2"/>
+          <line x1="70" y1="40" x2="210" y2="180"
+                stroke="var(--text-dim)" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.55"/>
+
+          <circle cx="70" cy="40" r="6" fill="var(--lm-high)"/>
+          <circle cx="70" cy="40" r="11" fill="none" stroke="var(--start-mark)" stroke-width="2"/>
+          <text x="70" y="22" text-anchor="middle" class="dg-sub"><tspan class="dg-start">시작</tspan> · 고음</text>
+
+          <circle cx="210" cy="40" r="6" fill="var(--lm-mid)"/>
+          <text x="210" y="22" text-anchor="middle" class="dg-sub">저음 또는 중음</text>
+
+          <circle cx="70" cy="180" r="6" fill="var(--lm-low)"/>
+          <text x="70" y="201" text-anchor="middle" class="dg-sub">저음 또는 중음</text>
+
+          <rect x="203" y="173" width="14" height="14" rx="3"
+                fill="none" stroke="var(--goal-mark)" stroke-width="2" stroke-dasharray="3 2"/>
+          <text x="210" y="201" text-anchor="middle" class="dg-sub"><tspan class="dg-goal">도착</tspan> · 소리 없음</text>
+        </svg>
+
         <ul>
-          <li>맵 내부 정해진 위치에서 소리를 내는 고정 지점입니다 (시행마다 0 / 2 / 3개 활성화).</li>
-          <li><b>소리가 3개인 시행, 2개인 시행, 아예 없는(0개) 시행이 각각 있습니다.</b> 소리가 하나도 안 들리는 시행이 있어도 정상입니다 — 고장이나 오류가 아닙니다.</li>
-          <li><b>목적지가 아니며, 방향을 직접 알려주지 않습니다.</b> 소리의 방향과 크기로 현재 위치를 추정하세요.</li>
-          <li>
-            서로 다른 3가지 음색이 사용됩니다.
-            <ul class="sub-list">
-              <li>저음 — 목재 펄스</li>
-              <li>중음 — 물방울 아르페지오</li>
-              <li>고음 — 금속 차임</li>
-            </ul>
-          </li>
-          <li>랜드마크에 가까워질수록 소리가 떨리듯 흔들립니다.</li>
+          <li><b>여러분이 출발하는 모서리</b>에서 고음(바람 소리)이 납니다.</li>
+          <li><b>양옆 두 모서리</b>에서 저음(나무 타격음)과 중음(물방울)이 하나씩 납니다. 어느 쪽이 저음인지는 시행마다 다르니 직접 들어서 확인하세요.</li>
+          <li><b>소리가 나지 않는 대각선 반대편 모서리가 목적지입니다.</b></li>
+        </ul>
+      </div>
+
+      <div class="info-block info-block--audio">
+        <p class="info-label">소리를 어떻게 쓰는가</p>
+        <ul>
+          <li>소리는 목적지 방향을 가리키지 않습니다. 세 소리가 <b>각각 어느 쪽에서 들리는지</b>로 지금 자신이 어느 쪽을 보고 있는지 판단하는 용도입니다.</li>
+          <li>시작하면 먼저 <b>제자리에서 천천히 한 바퀴 둘러보며</b> 어느 소리가 어느 방향에 있는지 확인하세요. 길을 잃었다 싶으면 언제든 다시 둘러보면 됩니다.</li>
+          <li>갈림길에서는 "지금 목적지 모서리는 어느 쪽인가"를 소리로 가늠해서 고르면 됩니다.</li>
+          <li>랜드마크에 가까워질수록 그 소리가 떨리듯 흔들립니다.</li>
+          <li><b>시행마다 소리가 3개 / 2개 / 0개로 달라집니다.</b> 하나도 안 들리는 시행이 있어도 정상입니다 — 고장이나 오류가 아닙니다.</li>
         </ul>
       </div>
 
@@ -78,12 +104,13 @@
     <!-- 2.5. 소리 미리 듣기 -->
     <section id="screen-soundcheck" class="screen hidden">
       <h2>소리 미리 듣기</h2>
-      <p class="hint">실전에 들어가기 전에 세 소리를 각각 눌러서 들어보고 구분해두세요. 이 소리들은 목적지가 아니라 미로 어딘가에 고정된 채 계속 울려퍼지는 지점입니다 — 미로 안에서는 방향에 따라 다르게 들립니다.</p>
+      <p class="hint">실전에 들어가기 전에 세 소리를 각각 눌러서 구분해두세요. 여기서는 방향 없이 음색만 들려줍니다 — 미로 안에서는 각 소리가 자기 모서리 쪽에서 들려옵니다.</p>
       <div id="soundcheck-list">
-        <button class="soundcheck-btn" data-idx="0">저음 · 목재 펄스<span>통통거리는 나무 타격음, 1.2초 간격</span></button>
-        <button class="soundcheck-btn" data-idx="1">중음 · 물방울 아르페지오<span>또르르 올라가는 짧은 음 3개, 1.8초 간격</span></button>
-        <button class="soundcheck-btn" data-idx="2">고음 · 금속 차임<span>길게 퍼지는 쇳소리 여운, 2.5초 간격</span></button>
+        <button class="soundcheck-btn" data-idx="0">저음 · 나무 타격음<span>탁, 하고 낮게 두드리는 소리, 1.2초 간격</span></button>
+        <button class="soundcheck-btn" data-idx="1">중음 · 물방울<span>똑, 똑 하고 위로 튀어오르는 두 방울, 1.8초 간격</span></button>
+        <button class="soundcheck-btn" data-idx="2">고음 · 바람 소리<span>쉬— 하고 높게 퍼졌다 사라지는 소리, 2.5초 간격 — 항상 시작 모서리에 있습니다</span></button>
       </div>
+      <p class="hint">다음은 연습 1회입니다. 연습 맵은 길이 짧은 전용 맵이라 목적지가 모서리에 있지 않습니다 — 조작과 소리 방향에 익숙해지는 용도입니다.</p>
       <button id="btn-start-warmup">연습 시작</button>
     </section>
 
@@ -109,8 +136,9 @@
     <!-- 5. 종료 화면 -->
     <section id="screen-done" class="screen hidden">
       <h2>수고하셨습니다!</h2>
-      <p>모든 시행이 끝났습니다. 아래 버튼을 눌러 결과 파일을 저장한 뒤, 연구자에게 전달해주세요.</p>
-      <button id="btn-download">결과 파일 다운로드 (JSON)</button>
+      <p>모든 시행이 끝났습니다. 결과는 자동으로 서버에 저장됩니다.</p>
+      <p id="save-status" class="hint"></p>
+      <button id="btn-download">결과 파일 다운로드 (JSON, 백업용)</button>
       <pre id="result-preview"></pre>
     </section>
 

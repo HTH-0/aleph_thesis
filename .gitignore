@@ -1,0 +1,5 @@
+node_modules/
+sim/data/raw/
+.env
+.env.local
+.vercel

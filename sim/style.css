@@ -10,6 +10,12 @@
   --warn: #e8b23d;
   --warn-bg: #2a2210;
   --warn-border: #6b5119;
+  /* 안내 화면 배치 도식용 — audio.js의 음색 순서(0 저음 / 1 중음 / 2 고음)와 맞춘다 */
+  --lm-low: #7fa6c6;
+  --lm-mid: #3fcfc6;
+  --lm-high: #e3a559;
+  --start-mark: #57c15c;
+  --goal-mark: #e2664a;
 }
 
 * { box-sizing: border-box; }
@@ -221,6 +227,24 @@ button:disabled {
   color: var(--text-dim);
   font-size: 0.94em;
 }
+
+/* 랜드마크 배치 도식 */
+.layout-diagram {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+  margin: 14px auto 6px;
+}
+
+.layout-diagram .dg-sub {
+  font-size: 11px;
+  fill: var(--text-dim);
+  font-family: inherit;
+}
+
+.layout-diagram .dg-start { fill: var(--start-mark); font-weight: 700; }
+.layout-diagram .dg-goal { fill: var(--goal-mark); font-weight: 700; }
 
 .survey-item {
   margin: 20px 0;

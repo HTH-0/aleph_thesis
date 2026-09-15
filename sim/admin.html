@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>결과 열람 (연구자 전용)</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+<link rel="stylesheet" href="style.css" />
+<style>
+  /* index.html의 가운데 정렬 좁은 화면 레이아웃(#app) 대신 넓은 표 레이아웃을 쓴다 */
+  body { display: block; }
+  #admin {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 40px 20px 80px;
+  }
+  .gate {
+    max-width: 420px;
+    margin: 80px auto;
+    text-align: center;
+  }
+  .gate input {
+    display: block;
+    width: 100%;
+    margin: 14px 0;
+    padding: 11px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--panel-border);
+    background: var(--panel);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 1em;
+  }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 18px;
+  }
+  .toolbar button { margin-top: 0; }
+  .toolbar .ghost {
+    background: transparent;
+    border: 1px solid var(--panel-border);
+    color: var(--text-dim);
+  }
+  .toolbar .ghost:hover { background: var(--panel); color: var(--text); }
+  .summary {
+    color: var(--text-dim);
+    font-size: 0.9em;
+    margin-left: auto;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86em;
+  }
+  th, td {
+    text-align: left;
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--panel-border);
+    white-space: nowrap;
+  }
+  th { color: var(--text-dim); font-weight: 600; font-size: 0.9em; }
+  tbody tr:hover { background: var(--panel); }
+  .badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 0.85em;
+    margin-right: 3px;
+    border: 1px solid var(--panel-border);
+  }
+  .badge--timeout { color: var(--warn); border-color: var(--warn-border); background: var(--warn-bg); }
+  .row-detail-btn {
+    margin: 0;
+    padding: 5px 10px;
+    font-size: 0.85em;
+    background: transparent;
+    border: 1px solid var(--panel-border);
+    color: var(--accent);
+  }
+  .detail-row td {
+    white-space: normal;
+    background: #000;
+  }
+  .detail-row pre {
+    margin: 0;
+    padding: 12px;
+    font-size: 0.85em;
+    overflow-x: auto;
+    max-height: 320px;
+  }
+  .detail-row.hidden { display: none; }
+  #status { color: var(--text-dim); margin: 20px 0; }
+  #table-wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<div id="admin">
+  <div class="eyebrow">청각 랜드마크 길찾기 실험 · 연구자 전용</div>
+  <h1>참가자 결과 열람</h1>
+
+  <div id="gate" class="gate">
+    <p class="hint">Vercel 프로젝트의 <code>ADMIN_KEY</code> 환경변수와 같은 값을 입력하세요.</p>
+    <input id="key-input" type="password" placeholder="admin key" autocomplete="off" />
+    <button id="btn-load">불러오기</button>
+    <p id="gate-error" class="hint" style="color:var(--warn)"></p>
+  </div>
+
+  <div id="content" class="hidden">
+    <div class="toolbar">
+      <button id="btn-refresh" class="ghost">새로고침</button>
+      <button id="btn-csv" class="ghost">CSV 다운로드 (시행 단위)</button>
+      <button id="btn-json" class="ghost">전체 JSON 다운로드</button>
+      <span class="summary" id="summary"></span>
+    </div>
+    <div id="table-wrap"></div>
+  </div>
+
+  <p id="status"></p>
+</div>
+
+<script>
+const gateEl = document.getElementById("gate");
+const contentEl = document.getElementById("content");
+const keyInput = document.getElementById("key-input");
+const gateError = document.getElementById("gate-error");
+const statusEl = document.getElementById("status");
+const summaryEl = document.getElementById("summary");
+const tableWrap = document.getElementById("table-wrap");
+
+let currentRows = [];
+let currentKey = sessionStorage.getItem("adminKey") || "";
+
+function fmtTime(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString("ko-KR", { hour12: false });
+}
+
+function trialBadges(row) {
+  const trials = (row.data && row.data.trials) || [];
+  return trials.map((t) => {
+    const cls = t.timedOut ? "badge badge--timeout" : "badge";
+    const eff = typeof t.pathEfficiency === "number" ? t.pathEfficiency.toFixed(2) : "-";
+    return `<span class="${cls}" title="맵${t.map}·랜드마크${t.landmarkLevel}개">#${t.trialIndex} ${t.elapsedSec?.toFixed(1) ?? "-"}s eff${eff}</span>`;
+  }).join(" ");
+}
+
+function renderTable(rows) {
+  currentRows = rows;
+  summaryEl.textContent = `총 ${rows.length}건`;
+
+  if (rows.length === 0) {
+    tableWrap.innerHTML = `<p class="hint">아직 저장된 결과가 없습니다.</p>`;
+    return;
+  }
+
+  let html = `<table><thead><tr>
+    <th>ID</th><th>저장 시각</th><th>이름</th><th>슬롯</th><th>R-SOD</th><th>본시행 3회</th><th></th>
+  </tr></thead><tbody>`;
+
+  rows.forEach((row, i) => {
+    html += `<tr>
+      <td>${row.id}</td>
+      <td>${fmtTime(row.created_at)}</td>
+      <td>${row.name ?? "-"}</td>
+      <td>${row.slot ?? "-"}</td>
+      <td>${row.rsod_total ?? "-"}</td>
+      <td>${trialBadges(row)}</td>
+      <td><button class="row-detail-btn" data-idx="${i}">JSON</button></td>
+    </tr>
+    <tr class="detail-row hidden" id="detail-${i}"><td colspan="7"><pre>${JSON.stringify(row.data, null, 2)}</pre></td></tr>`;
+  });
+
+  html += `</tbody></table>`;
+  tableWrap.innerHTML = html;
+
+  tableWrap.querySelectorAll(".row-detail-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.getElementById(`detail-${btn.dataset.idx}`).classList.toggle("hidden");
+    });
+  });
+}
+
+function csvEsc(v) {
+  if (v === null || v === undefined) return "";
+  const s = String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function toCSV(rows) {
+  const header = [
+    "submission_id", "created_at", "name", "slot", "rsod_total",
+    "trial_index", "map", "landmark_level", "elapsed_sec", "distance",
+    "shortest_world_distance", "path_efficiency", "reorientation_sec",
+    "dead_end_entries", "timed_out",
+  ];
+  const lines = [header.join(",")];
+  rows.forEach((row) => {
+    const trials = (row.data && row.data.trials) || [];
+    if (trials.length === 0) {
+      lines.push([row.id, row.created_at, csvEsc(row.name), row.slot, row.rsod_total].join(","));
+      return;
+    }
+    trials.forEach((t) => {
+      lines.push([
+        row.id, row.created_at, csvEsc(row.name), row.slot, row.rsod_total,
+        t.trialIndex, t.map, t.landmarkLevel, t.elapsedSec, t.distance,
+        t.shortestWorldDistance, t.pathEfficiency, t.reorientationSec,
+        t.deadEndEntries, t.timedOut,
+      ].join(","));
+    });
+  });
+  return lines.join("\n");
+}
+
+function download(filename, text, type) {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function loadResults(key) {
+  statusEl.textContent = "불러오는 중...";
+  gateError.textContent = "";
+  try {
+    const res = await fetch(`/api/results?key=${encodeURIComponent(key)}`);
+    if (res.status === 401) {
+      gateError.textContent = "키가 올바르지 않습니다.";
+      statusEl.textContent = "";
+      return;
+    }
+    if (!res.ok) throw new Error("서버 오류");
+    const json = await res.json();
+    currentKey = key;
+    sessionStorage.setItem("adminKey", key);
+    gateEl.classList.add("hidden");
+    contentEl.classList.remove("hidden");
+    renderTable(json.rows);
+    statusEl.textContent = "";
+  } catch (err) {
+    statusEl.textContent = "불러오기 실패: " + err.message;
+  }
+}
+
+document.getElementById("btn-load").addEventListener("click", () => {
+  const key = keyInput.value.trim();
+  if (key) loadResults(key);
+});
+keyInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("btn-load").click();
+});
+
+document.getElementById("btn-refresh").addEventListener("click", () => loadResults(currentKey));
+document.getElementById("btn-csv").addEventListener("click", () => {
+  download(`results_${Date.now()}.csv`, toCSV(currentRows), "text/csv");
+});
+document.getElementById("btn-json").addEventListener("click", () => {
+  download(`results_${Date.now()}.json`, JSON.stringify(currentRows, null, 2), "application/json");
+});
+
+if (currentKey) {
+  keyInput.value = currentKey;
+  loadResults(currentKey);
+}
+</script>
+</body>
+</html>

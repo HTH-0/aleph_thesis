@@ -2,15 +2,31 @@
 // 목적지 방향은 알려주지 않는다 — 그냥 "여기에 이런 소리가 난다"는
 // 고정된 기준점 정보만 주고, 참가자가 스스로 위치를 종합 추론해야 한다.
 //
+// **방향 전용 신호 (2026-09-15)**: 거리에 따른 음량 변화를 없앴다
+// (CONFIG.LANDMARK_ROLLOFF = 0). 랜드마크가 주는 정보는 "어느 쪽에서 들리는가"
+// 뿐이고 "얼마나 먼가"는 주지 않는다. 음량은 벽을 무시한 직선거리로 계산되는데
+// 미로에서 중요한 건 걸어야 하는 거리라서 두 값이 자주 어긋나고(= 음량이 오도함),
+// 시작 모서리 랜드마크는 진행도와 거리 상관이 1.00이라 음량이 그대로 진행도
+// 계기판이 되어버리기 때문이다. 자세한 근거는 config.js의 LANDMARK_ROLLOFF 주석 참고.
+// 근접 확인은 트레몰로(아래 lfoDepth 체인)가 계속 담당한다.
+//
 // 근거: Jetzschke et al. (2017) — 서로 완전히 같은 소리는 몇 개를 줘도
 // 위치 애매함이 안 풀리지만, 서로 다른(unique) 소리 3개는 애매함이 풀린다.
 // 그래서 3개 랜드마크를 저/중/고 주파수대와 리듬을 뚜렷하게 다르게 만든다.
 // (저주파는 양쪽 귀 도달시간차로, 고주파는 귓바퀴 형태에 의한 스펙트럼
 //  왜곡으로 방향을 판단하는 메커니즘 자체가 달라서, 대역을 나눠두면
 //  삼각측량에 쓸 수 있는 단서가 겹치지 않고 더 풍부해진다.)
-//   0: 목재 펄스 (저음 200~600Hz대, 통통거리는 타악기, 1.2초 간격)
-//   1: 물방울 아르페지오 (중음 800~2500Hz대, 상향하는 짧은 음 3개, 1.8초 간격)
-//   2: 금속 차임 (고음 3~6kHz대, 길게 퍼지는 잔향, 2.5초 간격)
+//   0: 나무 타격음 (저음 300~440Hz + 짧은 타격 트랜지언트, 1.2초 간격)
+//   1: 물방울 (중음 820~2550Hz를 빠르게 훑고 올라가는 "똑", 2번, 1.8초 간격)
+//   2: 바람 소리 (고음 3~5kHz대 대역통과 노이즈, 길게 퍼졌다 사라짐, 2.5초 간격)
+//
+// 이름과 실제 소리 대조 (2026-09-15): 원래 1번은 "물방울 아르페지오"라 불렀지만
+// 실제로는 사인파 3음을 계단식으로 올리는 알림음이었고, 2번은 "금속 차임"이라
+// 불렀지만 귀 아픔 문제로 노이즈 기반으로 바꾼 뒤였는데도 이름만 남아 있었다.
+// 참가자는 이 이름을 보고 소리를 찾아야 하므로(음색↔모서리 대응이 과제의 핵심)
+// 이름과 실제가 어긋나면 조작 자체가 흐려진다. 1번은 실제 물방울처럼 주파수를
+// 연속으로 활공시키도록 소리를 고쳤고, 2번은 노이즈 특성을 유지해야 해서
+// (아래 주석 참고) 이름을 실제에 맞게 "바람 소리"로 고쳤다.
 // 세 소리 모두 "주기적으로 짧게 울리고 끊기는" 방식으로 통일했다 — 이전엔 2번만
 // 끊김없이 계속 재생되는 허밍이라, "랜드마크 2개" 조건에서 2번이 빠지는 경우와
 // 0·1번이 빠지는 경우가 서로 다른 종류의 변화(끊김없는 소리 유무 자체가 바뀜)가
@@ -20,6 +36,7 @@
 class LandmarkAudio {
   constructor() {
     this.ctx = null;
+    this.masterGain = null;    // 전체 음량 (거리 감쇠를 없앤 대신 여기서 한 번에 조절)
     this.panners = [];         // 활성화된 PannerNode 목록
     this.timers = [];          // clearInterval 대상
     this.lfoNodes = [];        // 계속 재생 중인 오실레이터(근접 확인용 트레몰로 LFO) — stop 시 정지 필요
@@ -33,10 +50,16 @@ class LandmarkAudio {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     this.ctx = new AudioCtx();
 
+    // 거리 감쇠를 없앴기 때문에(CONFIG.LANDMARK_ROLLOFF = 0) 세 소리가 항상 최대
+    // 음량으로 겹친다. 전체 음량을 여기 한 곳에서 낮춰 클리핑을 막는다.
+    this.masterGain = this.ctx.createGain();
+    this.masterGain.gain.value = CONFIG.LANDMARK_MASTER_GAIN;
+    this.masterGain.connect(this.ctx.destination);
+
     const timbreFns = [
       (panner) => this._scheduleWood(panner),
-      (panner) => this._scheduleDropArpeggio(panner),
-      (panner) => this._scheduleChime(panner),
+      (panner) => this._scheduleDrop(panner),
+      (panner) => this._scheduleWind(panner),
     ];
 
     activeIndices.forEach((idx) => {
@@ -65,7 +88,7 @@ class LandmarkAudio {
       lfo.start();
 
       panner.connect(tremoloGain);
-      tremoloGain.connect(this.ctx.destination);
+      tremoloGain.connect(this.masterGain);
 
       this.lfoNodes.push(lfo);
       this.activeLandmarks.push({ pos, lfoDepth });
@@ -117,10 +140,28 @@ class LandmarkAudio {
     });
   }
 
-  // 0: 목재 펄스 — 저음(300/440Hz) 두 배음이 살짝 어긋난 통통거리는 타격음, 1.2초 간격
+  // 0: 나무 타격음 — 낮은 두 음(300/440Hz 삼각파)에 아주 짧은 저역 노이즈
+  // 트랜지언트를 얹어 "탁" 하고 때리는 성분을 만든다. 삼각파만 있을 땐 때리는
+  // 소리라기보다 마림바 음에 가까워서 이름과 어긋나 있었다. 트랜지언트는 방향
+  // 판단에도 유리하다 — 넓은 대역의 순간음이 귓바퀴 스펙트럼 단서를 가장 잘 만든다.
   _playWoodOnce(dest) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
+
+    const click = this.ctx.createBufferSource();
+    click.buffer = this._getNoiseBuffer();
+    const clickFilter = this.ctx.createBiquadFilter();
+    clickFilter.type = "lowpass";
+    clickFilter.frequency.value = 1800; // 고역을 깎아 나무 특유의 둔탁함을 만든다
+    const clickGain = this.ctx.createGain();
+    clickGain.gain.setValueAtTime(0.0001, t);
+    clickGain.gain.exponentialRampToValueAtTime(0.22, t + 0.002);
+    clickGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
+    click.connect(clickFilter);
+    clickFilter.connect(clickGain);
+    clickGain.connect(dest);
+    click.start(t); click.stop(t + 0.04);
+
     const osc1 = this.ctx.createOscillator();
     const osc2 = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -144,58 +185,69 @@ class LandmarkAudio {
     this.timers.push(setInterval(playOnce, 1200));
   }
 
-  // 1: 물방울 아르페지오 — 상향하는 짧은 음 3개(900/1300/1900Hz), 1.8초 간격
-  _playDropArpeggioOnce(dest) {
+  // 1: 물방울 — 실제 물방울 소리의 결정적 특징은 "음이 아주 빠르게 위로
+  // 미끄러져 올라가는" 것이다(수면에 갇힌 기포가 수축하며 공명 주파수가 올라감).
+  // 이전 버전은 사인파 3음을 계단식으로 올렸는데, 그러면 물방울이 아니라 알림음
+  // 처럼 들려서 이름과 실제가 어긋나 있었다. 주파수를 연속으로 활공시키는 방식으로
+  // 교체하고, 한 번 울릴 때 "똑, 똑" 두 방울로 만들어 들릴 기회를 늘렸다.
+  _playDropOnce(dest) {
     if (!this.ctx) return;
-    const notes = [900, 1300, 1900];
     const t0 = this.ctx.currentTime;
-    notes.forEach((freq, i) => {
-      const t = t0 + i * 0.09;
+    [0, 0.3].forEach((offset, i) => {
+      const t = t0 + offset;
+      const base = i === 0 ? 820 : 980; // 두 방울의 음높이를 살짝 다르게
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = "sine";
-      osc.frequency.setValueAtTime(freq, t);
+      osc.frequency.setValueAtTime(base, t);
+      osc.frequency.exponentialRampToValueAtTime(base * 2.6, t + 0.07); // 위로 활공
       gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.3, t + 0.005);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+      gain.gain.exponentialRampToValueAtTime(0.3, t + 0.004);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
       osc.connect(gain);
       gain.connect(dest);
-      osc.start(t); osc.stop(t + 0.16);
+      osc.start(t); osc.stop(t + 0.15);
     });
   }
 
-  _scheduleDropArpeggio(panner) {
-    const playOnce = () => this._playDropArpeggioOnce(panner);
+  _scheduleDrop(panner) {
+    const playOnce = () => this._playDropOnce(panner);
     playOnce();
     this.timers.push(setInterval(playOnce, 1800));
   }
 
-  // 2: 금속 차임 — 원래 순수 사인파 배음 여러 개를 겹쳐서 만들었는데, "날카롭고
+  // 2: 바람 소리 — 원래 순수 사인파 배음을 겹친 "금속 차임"이었는데, "날카롭고
   // 귀가 찢어질 것 같다"는 피드백이 반복됨. 순수음(pure tone)은 주파수가
   // 한 점에 집중돼 있어서 사람 귀에 유독 날카롭고 피로하게 들린다 — 특히
   // 2~5kHz대(사람 귀가 가장 민감한 대역이라 통증에도 가장 민감함)에서는
   // 게인을 아무리 낮춰도 잘 안 풀리는 문제였다. 그래서 순수음 대신 대역통과
-  // 필터를 씌운 노이즈(필터링된 화이트노이즈)로 바꿈 — 에너지가 한 주파수에
-  // 몰리지 않고 넓게 퍼져 있어서, 풍경(wind chime)이 "쟁그랑"보다 "샤르르"에
-  // 가깝게 들리는 것과 같은 원리로 훨씬 부드럽게 들린다. 고음역대라는 특징
-  // (귓바퀴 스펙트럼 왜곡으로 방향 판단에 유리)은 그대로 유지.
-  _getChimeNoiseBuffer() {
-    if (this._chimeNoiseBuffer && this._chimeNoiseBufferCtx === this.ctx) {
-      return this._chimeNoiseBuffer;
+  // 필터를 씌운 노이즈(필터링된 화이트노이즈)로 바꿨다.
+  //
+  // 이렇게 바꾼 뒤로는 "금속 차임"이라는 이름이 실제와 맞지 않는다 — Q=4짜리
+  // 넓은 대역통과(대역폭 약 850Hz)라 음정이 잡히지 않아서, 실제로는 쇳소리가
+  // 아니라 "쉬—" 하고 퍼졌다 사라지는 바람 소리에 가깝다. 소리를 되돌리면 귀
+  // 아픔이 재발하므로, 이름 쪽을 실제에 맞췄다.
+  //
+  // 노이즈라는 성질 자체가 이 실험엔 오히려 유리하다: (1) 넓은 대역 에너지가
+  // 귓바퀴 스펙트럼 단서를 가장 잘 만들어 고음 방향 판단에 최적이고, (2) 나머지
+  // 둘이 음정 있는 소리라 "음정 없는 소리 하나"가 섞이면 세 음색 구분이 쉬워진다.
+  _getNoiseBuffer() {
+    if (this._noiseBuffer && this._noiseBufferCtx === this.ctx) {
+      return this._noiseBuffer;
     }
-    const dur = 2; // 초
+    const dur = 2; // 초 (0번의 짧은 타격 트랜지언트도 이 버퍼 앞부분을 잘라 쓴다)
     const buffer = this.ctx.createBuffer(1, Math.ceil(this.ctx.sampleRate * dur), this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    this._chimeNoiseBuffer = buffer;
-    this._chimeNoiseBufferCtx = this.ctx;
+    this._noiseBuffer = buffer;
+    this._noiseBufferCtx = this.ctx;
     return buffer;
   }
 
-  _playChimeOnce(dest) {
+  _playWindOnce(dest) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    const buffer = this._getChimeNoiseBuffer();
+    const buffer = this._getNoiseBuffer();
     const bands = [[3400, 0.16], [4800, 0.1]]; // [중심주파수, 최대게인]
     bands.forEach(([freq, peak]) => {
       const src = this.ctx.createBufferSource();
@@ -215,24 +267,30 @@ class LandmarkAudio {
     });
   }
 
-  _scheduleChime(panner) {
-    const playOnce = () => this._playChimeOnce(panner);
+  _scheduleWind(panner) {
+    const playOnce = () => this._playWindOnce(panner);
     playOnce();
     this.timers.push(setInterval(playOnce, 2500));
   }
 
   // 안내 단계에서 "소리 미리 듣기" 버튼이 쓰는 진입점 — 공간감(패닝) 없이
   // 리스너 바로 앞에서 한 번만 재생해서, 세 음색을 구분하는 연습만 하게 한다.
-  // idx: 0=목재펄스, 1=물방울아르페지오, 2=금속차임
+  // idx: 0=나무 타격음, 1=물방울, 2=바람 소리
   previewOnce(idx) {
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       this.ctx = new AudioCtx();
     }
+    // 본시행과 같은 음량으로 들려줘야 연습이 의미가 있으므로 여기도 마스터 게인을 거친다.
+    if (!this.masterGain || this.masterGain.context !== this.ctx) {
+      this.masterGain = this.ctx.createGain();
+      this.masterGain.gain.value = CONFIG.LANDMARK_MASTER_GAIN;
+      this.masterGain.connect(this.ctx.destination);
+    }
     const fns = [
-      () => this._playWoodOnce(this.ctx.destination),
-      () => this._playDropArpeggioOnce(this.ctx.destination),
-      () => this._playChimeOnce(this.ctx.destination),
+      () => this._playWoodOnce(this.masterGain),
+      () => this._playDropOnce(this.masterGain),
+      () => this._playWindOnce(this.masterGain),
     ];
     fns[idx]();
   }
@@ -244,6 +302,7 @@ class LandmarkAudio {
     this.lfoNodes = [];
     this.panners = [];
     this.activeLandmarks = [];
+    this.masterGain = null;
     if (this.ctx) {
       this.ctx.close();
       this.ctx = null;
