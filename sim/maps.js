@@ -236,12 +236,27 @@ function mirrorH(mapDef) {
   return transformMapDef(mapDef, ([r, c]) => [r, n - 1 - c]);
 }
 
+function mirrorV(mapDef) {
+  const n = GRID_SIZE;
+  return transformMapDef(mapDef, ([r, c]) => [n - 1 - r, c]);
+}
+
 const BASE_MAP = buildBaseGrid();
 
+// map1/map2 조합을 rotate90+mirrorH로 뒀더니 "지도가 다 똑같아 보인다"는 피드백을
+// 받음 — 확인해보니 실제 벽 구조는 다른데(ASCII로 직접 대조), 시작-도착 칸
+// 좌표가 map1=[1,13]->[13,1], map2=[1,13]->[13,1]로 완전히 동일했음. 시작-도착이
+// 정반대각선(좌상단-우하단)일 때 90도 회전과 좌우반전이 우연히 같은 모서리 쌍을
+// 만들기 때문(둘 다 우상단->좌하단). 무늬 없는 벽+짙은 안개 환경에서는 "같은
+// 자리에서 또 시작한다"는 게 가장 눈에 띄는 신호라, 벽 구조가 달라도 참가자가
+// 같은 미로로 착각하기 쉬움. mirrorH 대신 mirrorV(상하반전)를 쓰면 map2의
+// 시작-도착이 [13,1]->[1,13]으로 바뀌어(모서리는 같지만 시작/도착이 뒤바뀜),
+// 세 시행의 "시작하는 순간 보이는 모서리"가 좌상단/우상단/좌하단으로 전부
+// 달라진다. 우하단 모서리는 map0에서만 도착점으로 쓰인다.
 const MAPS = [
   BASE_MAP,               // map 0 (원본)
   rotate90(BASE_MAP),      // map 1 (90도 회전)
-  mirrorH(BASE_MAP),       // map 2 (좌우 반전)
+  mirrorV(BASE_MAP),       // map 2 (상하 반전)
 ];
 
 // 연습(워밍업) 전용 맵. 본시행 맵(MAPS[0..2])과 별개로, 아주 짧고 쉬운 경로만

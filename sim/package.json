@@ -3,6 +3,6 @@
   "private": true,
   "description": "청각 랜드마크 길찾기 실험 시뮬레이터. api/ 아래 두 함수(제출/열람)만 이 의존성을 쓰고, 나머지는 순수 HTML/CSS/JS.",
   "dependencies": {
-    "@neondatabase/serverless": "^0.9.5"
+    "@neondatabase/serverless": "^1.1.0"
   }
 }
