@@ -50,30 +50,34 @@
         <p class="info-label">소리가 어디에 있는가</p>
         <p>미로는 정사각형이고, <b>네 모서리 중 세 곳</b>에서 각각 다른 소리가 계속 납니다.</p>
 
-        <svg class="layout-diagram" viewBox="0 0 280 212" role="img"
-             aria-label="정사각형 미로의 네 모서리 도식. 시작 모서리에 고음, 양옆 두 모서리에 저음과 중음, 대각선 반대편 모서리는 소리가 없는 목적지.">
-          <rect x="70" y="40" width="140" height="140" rx="6"
+        <svg class="layout-diagram" viewBox="0 0 280 218" role="img"
+             aria-label="정사각형 미로 도식. 시작 모서리 바깥 멀리에 고음, 양옆 두 모서리에 저음과 중음, 대각선 반대편 모서리는 소리가 없는 목적지.">
+          <rect x="80" y="52" width="130" height="130" rx="6"
                 fill="none" stroke="var(--panel-border)" stroke-width="2"/>
-          <line x1="70" y1="40" x2="210" y2="180"
+          <line x1="80" y1="52" x2="210" y2="182"
                 stroke="var(--text-dim)" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.55"/>
 
-          <circle cx="70" cy="40" r="6" fill="var(--lm-high)"/>
-          <circle cx="70" cy="40" r="11" fill="none" stroke="var(--start-mark)" stroke-width="2"/>
-          <text x="70" y="22" text-anchor="middle" class="dg-sub"><tspan class="dg-start">시작</tspan> · 고음</text>
+          <line x1="56" y1="28" x2="80" y2="52"
+                stroke="var(--lm-high)" stroke-width="1.5" stroke-dasharray="3 3" opacity="0.7"/>
+          <circle cx="56" cy="28" r="6" fill="var(--lm-high)"/>
+          <text x="56" y="16" text-anchor="middle" class="dg-sub">고음 (미로 밖)</text>
 
-          <circle cx="210" cy="40" r="6" fill="var(--lm-mid)"/>
-          <text x="210" y="22" text-anchor="middle" class="dg-sub">저음 또는 중음</text>
+          <circle cx="80" cy="52" r="10" fill="none" stroke="var(--start-mark)" stroke-width="2"/>
+          <text x="66" y="70" text-anchor="end" class="dg-sub dg-start">시작</text>
 
-          <circle cx="70" cy="180" r="6" fill="var(--lm-low)"/>
-          <text x="70" y="201" text-anchor="middle" class="dg-sub">저음 또는 중음</text>
+          <circle cx="210" cy="52" r="6" fill="var(--lm-mid)"/>
+          <text x="210" y="34" text-anchor="middle" class="dg-sub">저음 또는 중음</text>
 
-          <rect x="203" y="173" width="14" height="14" rx="3"
+          <circle cx="80" cy="182" r="6" fill="var(--lm-low)"/>
+          <text x="80" y="203" text-anchor="middle" class="dg-sub">저음 또는 중음</text>
+
+          <rect x="203" y="175" width="14" height="14" rx="3"
                 fill="none" stroke="var(--goal-mark)" stroke-width="2" stroke-dasharray="3 2"/>
-          <text x="210" y="201" text-anchor="middle" class="dg-sub"><tspan class="dg-goal">도착</tspan> · 소리 없음</text>
+          <text x="210" y="203" text-anchor="middle" class="dg-sub"><tspan class="dg-goal">도착</tspan> · 소리 없음</text>
         </svg>
 
         <ul>
-          <li><b>여러분이 출발하는 모서리</b>에서 고음(바람 소리)이 납니다.</li>
+          <li>고음(바람 소리)은 <b>여러분이 출발하는 모서리 쪽 바깥 멀리</b>에서 들려옵니다. 멀리 있어서 가까이 갈 수는 없지만, 방향은 항상 일정합니다.</li>
           <li><b>양옆 두 모서리</b>에서 저음(나무 타격음)과 중음(물방울)이 하나씩 납니다. 어느 쪽이 저음인지는 시행마다 다르니 직접 들어서 확인하세요.</li>
           <li><b>소리가 나지 않는 대각선 반대편 모서리가 목적지입니다.</b></li>
         </ul>
@@ -108,7 +112,7 @@
       <div id="soundcheck-list">
         <button class="soundcheck-btn" data-idx="0">저음 · 나무 타격음<span>탁, 하고 낮게 두드리는 소리, 1.2초 간격</span></button>
         <button class="soundcheck-btn" data-idx="1">중음 · 물방울<span>똑, 똑 하고 위로 튀어오르는 두 방울, 1.8초 간격</span></button>
-        <button class="soundcheck-btn" data-idx="2">고음 · 바람 소리<span>쉬— 하고 높게 퍼졌다 사라지는 소리, 2.5초 간격 — 항상 시작 모서리에 있습니다</span></button>
+        <button class="soundcheck-btn" data-idx="2">고음 · 바람 소리<span>쉬— 하고 높게 퍼졌다 사라지는 소리, 2.5초 간격 — 항상 시작 모서리 쪽 바깥에서 들려옵니다</span></button>
       </div>
       <p class="hint">다음은 연습 1회입니다. 연습 맵은 길이 짧은 전용 맵이라 목적지가 모서리에 있지 않습니다 — 조작과 소리 방향에 익숙해지는 용도입니다.</p>
       <button id="btn-start-warmup">연습 시작</button>
