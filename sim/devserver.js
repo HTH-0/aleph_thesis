@@ -67,6 +67,24 @@ function handleResults(req, res, searchParams) {
   sendJSON(res, 200, { ok: true, rows });
 }
 
+// admin.html의 삭제 버튼이 로컬에서도 동작하도록 흉내낸다. 배포판은 id가 숫자(DB PK)지만
+// 로컬은 파일명을 id로 쓰므로, 그 파일명이 정확히 DATA_DIR 안에 있는 파일인지 확인
+// 후에만 지운다(경로 조작 방지).
+function handleDelete(req, res, searchParams) {
+  if (searchParams.get("key") !== LOCAL_ADMIN_KEY) {
+    sendJSON(res, 401, { error: `인증 실패 (로컬 admin 키는 "${LOCAL_ADMIN_KEY}")` });
+    return;
+  }
+  const id = searchParams.get("id") || "";
+  const target = path.join(DATA_DIR, id);
+  if (path.dirname(target) !== DATA_DIR || !fs.existsSync(target)) {
+    sendJSON(res, 404, { error: "해당 id를 찾을 수 없습니다." });
+    return;
+  }
+  fs.unlinkSync(target);
+  sendJSON(res, 200, { ok: true, deletedId: id });
+}
+
 http.createServer((req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
 
@@ -76,6 +94,10 @@ http.createServer((req, res) => {
   }
   if (url.pathname === "/api/results" && req.method === "GET") {
     handleResults(req, res, url.searchParams);
+    return;
+  }
+  if (url.pathname === "/api/results" && req.method === "DELETE") {
+    handleDelete(req, res, url.searchParams);
     return;
   }
 

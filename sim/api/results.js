@@ -4,8 +4,8 @@
 const { neon } = require("@neondatabase/serverless");
 
 module.exports = async (req, res) => {
-  if (req.method !== "GET") {
-    res.status(405).json({ error: "GET만 허용됩니다." });
+  if (req.method !== "GET" && req.method !== "DELETE") {
+    res.status(405).json({ error: "GET 또는 DELETE만 허용됩니다." });
     return;
   }
   if (!process.env.ADMIN_KEY || req.query.key !== process.env.ADMIN_KEY) {
@@ -17,8 +17,30 @@ module.exports = async (req, res) => {
     return;
   }
 
+  const sql = neon(process.env.DATABASE_URL);
+
+  // 테스트 데이터를 지울 때 admin.html에서 쓰는 삭제 경로. DELETE /api/results?key=...&id=3
+  if (req.method === "DELETE") {
+    const id = Number(req.query.id);
+    if (!Number.isInteger(id)) {
+      res.status(400).json({ error: "id가 올바르지 않습니다." });
+      return;
+    }
+    try {
+      const rows = await sql`DELETE FROM submissions WHERE id = ${id} RETURNING id`;
+      if (rows.length === 0) {
+        res.status(404).json({ error: "해당 id를 찾을 수 없습니다." });
+        return;
+      }
+      res.status(200).json({ ok: true, deletedId: id });
+    } catch (err) {
+      console.error("delete error:", err);
+      res.status(500).json({ error: "삭제 중 오류가 발생했습니다." });
+    }
+    return;
+  }
+
   try {
-    const sql = neon(process.env.DATABASE_URL);
     await sql`
       CREATE TABLE IF NOT EXISTS submissions (
         id SERIAL PRIMARY KEY,

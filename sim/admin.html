@@ -80,6 +80,15 @@
     border: 1px solid var(--panel-border);
     color: var(--accent);
   }
+  .row-delete-btn {
+    margin: 0 0 0 6px;
+    padding: 5px 10px;
+    font-size: 0.85em;
+    background: transparent;
+    border: 1px solid var(--warn-border);
+    color: var(--warn);
+  }
+  .row-delete-btn:hover { background: var(--warn-bg); }
   .detail-row td {
     white-space: normal;
     background: #000;
@@ -169,7 +178,10 @@ function renderTable(rows) {
       <td>${row.slot ?? "-"}</td>
       <td>${row.rsod_total ?? "-"}</td>
       <td>${trialBadges(row)}</td>
-      <td><button class="row-detail-btn" data-idx="${i}">JSON</button></td>
+      <td>
+        <button class="row-detail-btn" data-idx="${i}">JSON</button>
+        <button class="row-delete-btn" data-id="${row.id}" data-name="${(row.name ?? "").replace(/"/g, "&quot;")}">삭제</button>
+      </td>
     </tr>
     <tr class="detail-row hidden" id="detail-${i}"><td colspan="7"><pre>${JSON.stringify(row.data, null, 2)}</pre></td></tr>`;
   });
@@ -182,6 +194,29 @@ function renderTable(rows) {
       document.getElementById(`detail-${btn.dataset.idx}`).classList.toggle("hidden");
     });
   });
+
+  tableWrap.querySelectorAll(".row-delete-btn").forEach((btn) => {
+    btn.addEventListener("click", () => deleteRow(btn.dataset.id, btn.dataset.name));
+  });
+}
+
+async function deleteRow(id, name) {
+  const label = name ? `"${name}" (id ${id})` : `id ${id}`;
+  if (!confirm(`${label} 결과를 삭제할까요? 되돌릴 수 없습니다.`)) return;
+  statusEl.textContent = "삭제하는 중...";
+  try {
+    const res = await fetch(`/api/results?key=${encodeURIComponent(currentKey)}&id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "삭제 실패");
+    }
+    statusEl.textContent = "";
+    loadResults(currentKey);
+  } catch (err) {
+    statusEl.textContent = "삭제 실패: " + err.message;
+  }
 }
 
 function csvEsc(v) {
