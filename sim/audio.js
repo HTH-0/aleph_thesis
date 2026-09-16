@@ -65,7 +65,10 @@ class LandmarkAudio {
     activeIndices.forEach((idx) => {
       const panner = this.ctx.createPanner();
       panner.panningModel = "HRTF";
-      panner.distanceModel = "inverse";
+      // linear 모델 + rolloffFactor=1 조합이라야 maxDistance 밖에서 정확히
+      // 무음이 된다(config.js의 LANDMARK_ROLLOFF 주석 참고) — inverse는
+      // 아무리 멀어도 완전히 0이 되지 않아 "늘 들리는 배경음"이 되는 문제가 있었다.
+      panner.distanceModel = "linear";
       panner.refDistance = CONFIG.LANDMARK_REF_DISTANCE;
       panner.maxDistance = CONFIG.LANDMARK_MAX_DISTANCE;
       panner.rolloffFactor = CONFIG.LANDMARK_ROLLOFF;
@@ -248,10 +251,11 @@ class LandmarkAudio {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     const buffer = this._getNoiseBuffer();
-    // [중심주파수, 최대게인]. 이 랜드마크만 미로 바깥(시작 모서리에서 대각선 8칸
-    // 밖)에 있어서 거리 감쇠를 약 6dB 더 받는다 — 나머지 둘과 귀에 닿는 음량을
-    // 맞추려고 음원 쪽 게인을 2배로 올려둔다(멀리서 듣게 되므로 실제 체감은 동일).
-    const bands = [[3400, 0.32], [4800, 0.2]];
+    // [중심주파수, 최대게인]. 예전 inverse 감쇠 모델일 때는 이 랜드마크가 멀리
+    // 있어서 게인을 2배로 보정했었는데, linear+하드 컷오프로 바꾼 뒤로는 들릴 때
+    // (maxDistance 안쪽)의 감쇠 곡선 자체가 달라져서 그 보정이 더는 맞지 않는다
+    // (config.js의 LANDMARK_ROLLOFF 주석 참고) — 원래 게인으로 되돌림.
+    const bands = [[3400, 0.16], [4800, 0.1]];
     bands.forEach(([freq, peak]) => {
       const src = this.ctx.createBufferSource();
       src.buffer = buffer;
