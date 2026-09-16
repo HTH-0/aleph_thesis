@@ -12,6 +12,12 @@ function getSharedRenderer(canvas) {
   return _sharedRenderer;
 }
 
+// URL에 ?test=1이 붙어있을 때만 활성화되는 개발/QA 전용 단축키(P = 즉시 도착).
+// 배포 전체 흐름(서버 저장 등)을 매번 미로를 끝까지 걸어서 확인하려면 너무
+// 오래 걸린다는 요청으로 추가함. 쿼리 파라미터가 없는 일반 주소로 들어온
+// 참가자에게는 이 키가 완전히 무반응이라 실수로 쓰일 위험이 없다.
+const TRIAL_TEST_MODE = new URLSearchParams(window.location.search).get("test") === "1";
+
 // spec: { canvas, overlayEl, mapDef, landmarkCount, activeLandmarkIndices }
 function runTrial(spec, onComplete) {
   const { canvas, overlayEl, mapDef, activeLandmarkIndices } = spec;
@@ -175,7 +181,10 @@ function runTrial(spec, onComplete) {
 
   const audio = new LandmarkAudio();
   const keys = {};
-  function onKeyDown(e) { keys[e.code] = true; }
+  function onKeyDown(e) {
+    keys[e.code] = true;
+    if (TRIAL_TEST_MODE && e.code === "KeyP" && started && !finished) finish(false);
+  }
   function onKeyUp(e) { keys[e.code] = false; }
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
