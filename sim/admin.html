@@ -148,12 +148,15 @@ function fmtTime(iso) {
   return d.toLocaleString("ko-KR", { hour12: false });
 }
 
+const LEVEL_LABEL = { 0: "0개", 2: "2개", 3: "3개" };
+
 function trialBadges(row) {
   const trials = (row.data && row.data.trials) || [];
   return trials.map((t) => {
     const cls = t.timedOut ? "badge badge--timeout" : "badge";
     const eff = typeof t.pathEfficiency === "number" ? t.pathEfficiency.toFixed(2) : "-";
-    return `<span class="${cls}" title="맵${t.map}·랜드마크${t.landmarkLevel}개">#${t.trialIndex} ${t.elapsedSec?.toFixed(1) ?? "-"}s eff${eff}</span>`;
+    const level = LEVEL_LABEL[t.landmarkLevel] ?? `${t.landmarkLevel}개`;
+    return `<span class="${cls}" title="맵${t.map}">#${t.trialIndex} 랜드마크${level} · ${t.elapsedSec?.toFixed(1) ?? "-"}s · eff${eff}</span>`;
   }).join(" ");
 }
 
