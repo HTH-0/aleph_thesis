@@ -98,7 +98,7 @@ document.getElementById("btn-start-warmup").addEventListener("click", () => {
   // 짧고 쉬운 전용 맵(WARMUP_MAP)을 써서 연습이 과하게 어려워지지 않게 한다.
   startTrialPhase({ mapDef: WARMUP_MAP, activeLandmarkIndices: [0, 1, 2] }, () => {
     betweenTitle.textContent = "연습 완료";
-    betweenDesc.textContent = "이제부터가 실제 기록되는 본 시행입니다. 소리가 나는 세 모서리를 뺀 대각선 반대편 모서리가 목적지입니다. 준비되면 다음을 눌러주세요.";
+    betweenDesc.textContent = "이제부터가 실제 기록되는 본 시행입니다. 준비되면 다음을 눌러주세요.";
     btnNextTrial.onclick = () => runMainTrial(0);
     showScreen("between");
   });
