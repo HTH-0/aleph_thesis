@@ -75,7 +75,14 @@ const betweenTitle = document.getElementById("between-title");
 const betweenDesc = document.getElementById("between-desc");
 const btnNextTrial = document.getElementById("btn-next-trial");
 
-document.getElementById("btn-goto-soundcheck").addEventListener("click", () => {
+// "시행마다 소리 개수가 0/2/3개로 달라진다"는 걸 놓치고 0개 조건에서 고장으로
+// 오인하는 걸 막으려고, 이 문구를 안내문 목록에 묻어두는 대신 별도 체크박스로
+// 빼서 실제로 확인했다는 걸 받아낸다 — 체크 전엔 다음 버튼이 비활성 상태.
+const btnGotoSoundcheck = document.getElementById("btn-goto-soundcheck");
+document.getElementById("chk-count-notice").addEventListener("change", (e) => {
+  btnGotoSoundcheck.disabled = !e.target.checked;
+});
+btnGotoSoundcheck.addEventListener("click", () => {
   showScreen("soundcheck");
 });
 
