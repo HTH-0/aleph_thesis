@@ -12,15 +12,31 @@ function getSharedRenderer(canvas) {
   return _sharedRenderer;
 }
 
-// URL에 ?test=1이 붙어있을 때만 활성화되는 개발/QA 전용 단축키(P = 즉시 도착).
-// 배포 전체 흐름(서버 저장 등)을 매번 미로를 끝까지 걸어서 확인하려면 너무
-// 오래 걸린다는 요청으로 추가함. 쿼리 파라미터가 없는 일반 주소로 들어온
-// 참가자에게는 이 키가 완전히 무반응이라 실수로 쓰일 위험이 없다.
+// URL에 ?test=1이 붙어있을 때만 활성화되는 개발/QA 전용 기능들(P = 즉시 도착,
+// 좌상단 HUD = 랜드마크별 실시간 거리·음량 표시). 배포 전체 흐름(서버 저장 등)을
+// 매번 미로를 끝까지 걸어서 확인하려면 너무 오래 걸린다는 요청, 그리고 거리
+// 감쇠가 실제로 의도대로 작동하는지 귀로만 판단하기 어렵다는 요청으로 추가함.
+// 쿼리 파라미터가 없는 일반 주소로 들어온 참가자에게는 전부 무반응이라 실수로
+// 쓰일 위험이 없다.
 const TRIAL_TEST_MODE = new URLSearchParams(window.location.search).get("test") === "1";
+const LANDMARK_TEST_NAMES = ["0 나무", "1 물방울", "2 바람"];
+
+// Web Audio PannerNode의 linear 감쇠 공식을 그대로 흉내내서, "지금 이 거리면
+// 음량이 몇 %여야 하는가"를 HUD에 보여준다(audio.js가 실제로 이 계산을 하는 게
+// 아니라 브라우저 내장 로직이 하므로, 직접 값을 읽어올 API가 없어 재계산함 —
+// config.js 값을 그대로 쓰므로 실제 감쇠 설정과 항상 같이 움직인다).
+function computeLinearGain(distance) {
+  const ref = CONFIG.LANDMARK_REF_DISTANCE;
+  const max = CONFIG.LANDMARK_MAX_DISTANCE;
+  const rolloff = CONFIG.LANDMARK_ROLLOFF;
+  const d = Math.max(ref, Math.min(max, distance));
+  return Math.max(0, 1 - rolloff * (d - ref) / (max - ref));
+}
 
 // spec: { canvas, overlayEl, mapDef, landmarkCount, activeLandmarkIndices }
 function runTrial(spec, onComplete) {
   const { canvas, overlayEl, mapDef, activeLandmarkIndices } = spec;
+  const hudEl = TRIAL_TEST_MODE ? document.getElementById("trial-hud") : null;
 
   const renderer = getSharedRenderer(canvas);
 
@@ -356,6 +372,17 @@ function runTrial(spec, onComplete) {
       wasInDeadEnd = inDeadEnd;
 
       audio.updateListener(camera);
+
+      if (hudEl) {
+        const lines = activeLandmarkIndices.map((idx) => {
+          const lp = landmarkWorldPositions[idx];
+          const d = Math.hypot(camera.position.x - lp.x, camera.position.z - lp.z);
+          const gain = computeLinearGain(d);
+          const audible = d <= CONFIG.LANDMARK_MAX_DISTANCE ? "" : " (무음)";
+          return `${LANDMARK_TEST_NAMES[idx]}: 거리 ${d.toFixed(1)} / 음량 ${(gain * 100).toFixed(0)}%${audible}`;
+        });
+        hudEl.textContent = lines.length ? lines.join("\n") : "(이번 시행 랜드마크 0개)";
+      }
 
       const dGoal = Math.hypot(
         camera.position.x - goalPos.x,

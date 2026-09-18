@@ -306,6 +306,8 @@ button:disabled {
   font-size: 0.85em;
   color: #888;
   pointer-events: none;
+  white-space: pre-line;
+  font-family: ui-monospace, monospace;
 }
 
 .overlay {

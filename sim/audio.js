@@ -50,8 +50,8 @@ class LandmarkAudio {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     this.ctx = new AudioCtx();
 
-    // 거리 감쇠를 없앴기 때문에(CONFIG.LANDMARK_ROLLOFF = 0) 세 소리가 항상 최대
-    // 음량으로 겹친다. 전체 음량을 여기 한 곳에서 낮춰 클리핑을 막는다.
+    // 전체 음량을 한 곳에서 조절하는 지점(세 소리가 동시에 가까이서 겹칠 때
+    // 클리핑되지 않도록). config.js: LANDMARK_MASTER_GAIN 참고.
     this.masterGain = this.ctx.createGain();
     this.masterGain.gain.value = CONFIG.LANDMARK_MASTER_GAIN;
     this.masterGain.connect(this.ctx.destination);
